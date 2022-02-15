@@ -1,0 +1,43 @@
+defaults:
+  - model: mlp
+  - datamodule: fashion_mnist
+  - loop: default_loop
+
+
+gpus: 1
+num_workers: 4
+random_seed: 1590258941
+
+training:
+  epochs: 100
+  batch_size: 32
+  accumulate_batches: 1
+  # checkpointing
+  save_ckpts: 10
+  monitor: val/loss
+  mode: min
+  patience: 5
+
+testing:
+  batch_size: 512
+
+metrics:
+  # apply before passing to metrics
+  to_probabilities: 'softmax'
+  metrics_list:
+    - _target_: torchmetrics.Accuracy
+    - _target_: torchmetrics.F1Score
+      num_classes: 10
+
+logger:
+  _target_: logger.loggers.WandbMinMaxLogger
+log_gradients: False
+
+
+hydra:
+  run:
+    dir: ./outputs/single/${model._target_}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+  sweep:
+    dir: outputs/sweep/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    # subdir: lr:${loop.optimizer.lr}

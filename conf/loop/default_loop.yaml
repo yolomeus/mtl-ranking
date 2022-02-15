@@ -1,0 +1,7 @@
+defaults:
+  - loss: cross_entropy
+  - optimizer: adam
+
+_target_: loop.DefaultClassificationLoop
+
+
