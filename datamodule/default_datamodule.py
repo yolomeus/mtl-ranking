@@ -1,10 +1,13 @@
 from abc import abstractmethod
 from typing import Optional
 
+import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, TensorDataset
 
 from datamodule import DatasetSplit
+from datamodule.dataset import MTLDataset
+from datamodule.sampler import RoundRobin
 
 
 class AbstractDefaultDataModule(LightningDataModule):
@@ -97,34 +100,45 @@ class AbstractDefaultDataModule(LightningDataModule):
         return None
 
 
-class ClassificationDataModule(AbstractDefaultDataModule):
-    """Datamodule for a standard classification setting with training instances and labels.
-    """
+class MTLDataModule(AbstractDefaultDataModule):
+    def __init__(self, train_conf, test_conf, num_workers, pin_memory):
+        super().__init__(train_conf, test_conf, num_workers, pin_memory)
 
-    @abstractmethod
-    def instances_and_labels(self, split: DatasetSplit):
-        """Get tuple of instances and labels for classification.
-
-        :param split: the dataset split use.
-        :return (tuple): instances and labels for a specific split.
-        """
-
-    def _create_dataset(self, split: DatasetSplit):
-        """Helper factory method for building a split specific pytorch dataset.
-
-        :param split: which split to build.
-        :return: the split specific pytorch dataset.
-        """
-        return TensorDataset(*self.instances_and_labels(split))
-
-    @property
     def train_ds(self):
-        return self._create_dataset(DatasetSplit.TRAIN)
+        return MTLDataset([TensorDataset(torch.rand(12808, 10), torch.randint(10, (12808,))),
+                           TensorDataset(torch.rand(64003, 9), torch.randint(10, (64003,))),
+                           TensorDataset(torch.rand(32004, 7), torch.randint(10, (32004,)))])
 
-    @property
     def val_ds(self):
-        return self._create_dataset(DatasetSplit.VALIDATION)
+        return TensorDataset(torch.rand(128, 10), torch.randint(10, (128,)))
 
-    @property
     def test_ds(self):
-        return self._create_dataset(DatasetSplit.TEST)
+        return TensorDataset(torch.rand(128, 10), torch.randint(10, (128,)))
+
+    def train_dataloader(self):
+        train_dl = DataLoader(self._train_ds,
+                              self._train_conf.batch_size,
+                              num_workers=self._num_workers,
+                              pin_memory=self._pin_memory,
+                              collate_fn=self.build_collate_fn(DatasetSplit.TRAIN),
+                              persistent_workers=self._num_workers > 0,
+                              sampler=RoundRobin(self._train_conf.batch_size, self._train_ds))
+        return train_dl
+
+    def val_dataloader(self):
+        val_dl = DataLoader(self._val_ds,
+                            self._test_conf.batch_size,
+                            num_workers=self._num_workers,
+                            pin_memory=self._pin_memory,
+                            collate_fn=self.build_collate_fn(DatasetSplit.VALIDATION),
+                            persistent_workers=self._num_workers > 0)
+        return val_dl
+
+    def test_dataloader(self):
+        test_dl = DataLoader(self._test_ds,
+                             self._test_conf.batch_size,
+                             num_workers=self._num_workers,
+                             pin_memory=self._pin_memory,
+                             collate_fn=self.build_collate_fn(DatasetSplit.TEST),
+                             persistent_workers=self._num_workers > 0)
+        return test_dl

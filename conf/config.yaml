@@ -1,11 +1,11 @@
 defaults:
   - model: mlp
-  - datamodule: fashion_mnist
+  - datamodule: mtl
   - loop: default_loop
 
 
 gpus: 1
-num_workers: 4
+num_workers: 0
 random_seed: 1590258941
 
 training:
@@ -19,7 +19,7 @@ training:
   patience: 5
 
 testing:
-  batch_size: 512
+  batch_size: ${training.batch_size}
 
 metrics:
   # apply before passing to metrics
