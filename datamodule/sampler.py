@@ -18,7 +18,7 @@ class RoundRobin(Sampler):
         self.num_datasets = data_source.num_datasets
         self.batch_size = batch_size
 
-        self._max_ds_len = max(data_source.dataset_lengths)
+        self._max_ds_len = max(data_source.dataset_sizes)
         if self._max_ds_len % batch_size != 0:
             if drop_last:
                 self._max_ds_len -= self._max_ds_len % batch_size
@@ -28,7 +28,7 @@ class RoundRobin(Sampler):
         # generate an index for each dataset with max_ds_len
         # for datasets with length < max_ds_len we sample uniformly
         self.indices = []
-        for ds_len in data_source.dataset_lengths:
+        for ds_len in data_source.dataset_sizes:
             ds_idx = torch.randperm(ds_len)
 
             if ds_len < self._max_ds_len:
