@@ -1,6 +1,6 @@
 defaults:
   - model: mlp
-  - datamodule: mtl
+  - datamodule: multitask
   - loop: default_loop
 
 
