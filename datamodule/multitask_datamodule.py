@@ -1,31 +1,37 @@
-import torch
-from torch.utils.data import TensorDataset, DataLoader
+from typing import Optional
+
+from pytorch_lightning import LightningDataModule
+from torch.utils.data import DataLoader
 
 from datamodule import DatasetSplit
-from datamodule.dataset import MTLDataset
-from datamodule.default_datamodule import AbstractDefaultDataModule
+from datamodule.dataset import DummyDataset, MTLDataset
 from datamodule.sampler import RoundRobin
 
 
-class MTLDataModule(AbstractDefaultDataModule):
+class MTLDataModule(LightningDataModule):
     def __init__(self, train_conf, test_conf, num_workers, pin_memory):
-        super().__init__(train_conf, test_conf, num_workers, pin_memory)
+        super().__init__()
+
+        self._train_conf = train_conf
+        self._test_conf = test_conf
+        self._num_workers = num_workers
+        self._pin_memory = pin_memory
+
+        self._dataset = MTLDataset([DummyDataset(12808, 10, 10, 'dummy_00'),
+                                    DummyDataset(64003, 9, 10, 'dummy_01'),
+                                    DummyDataset(32004, 7, 10, 'dummy_02')])
+
+        self._train_ds = None
+        self._val_ds = None
+        self._test_ds = None
 
     def prepare_data(self) -> None:
-        self._train_ds.prepare_data()
-        self._val_ds.prepare_data()
-        self._test_ds.prepare_data()
+        self._dataset.prepare_data()
 
-    def train_ds(self) -> MTLDataset:
-        return MTLDataset([TensorDataset(torch.rand(12808, 10), torch.randint(10, (12808,))),
-                           TensorDataset(torch.rand(64003, 9), torch.randint(10, (64003,))),
-                           TensorDataset(torch.rand(32004, 7), torch.randint(10, (32004,)))])
-
-    def val_ds(self):
-        return TensorDataset(torch.rand(128, 10), torch.randint(10, (128,)))
-
-    def test_ds(self):
-        return TensorDataset(torch.rand(128, 10), torch.randint(10, (128,)))
+    def setup(self, stage: Optional[str] = None) -> None:
+        self._train_ds = self._dataset.get_split(DatasetSplit.TRAIN)
+        self._val_ds = self._dataset.get_split(DatasetSplit.VALIDATION)
+        self._test_ds = self._dataset.get_split(DatasetSplit.TEST)
 
     def train_dataloader(self):
         train_dl = DataLoader(self._train_ds,
@@ -54,3 +60,23 @@ class MTLDataModule(AbstractDefaultDataModule):
                              collate_fn=self.build_collate_fn(DatasetSplit.TEST),
                              persistent_workers=self._num_workers > 0)
         return test_dl
+
+    @staticmethod
+    def build_collate_fn(split: DatasetSplit = None):
+        """Override to define a custom collate function. Build a function for collating multiple data instances into
+        a batch. Defaults to returning `None` since it's the default for DataLoader's collate_fn argument.
+
+        While different collate functions might be needed depending on the _dataset split, in most cases the same
+        function can be returned for all data splits.
+
+        :param split: The split that the collate function is used on to build batches. Can be ignored when train and
+        test data share the same structure.
+        :return: a single argument function that takes a list of tuples/instances and returns a batch as tensor or a
+        tuple of multiple batch tensors.
+        """
+
+        def collate(batch):
+            print('todo')
+            return batch
+
+        return collate
