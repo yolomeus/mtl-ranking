@@ -11,7 +11,12 @@ class MTLDataModule(AbstractDefaultDataModule):
     def __init__(self, train_conf, test_conf, num_workers, pin_memory):
         super().__init__(train_conf, test_conf, num_workers, pin_memory)
 
-    def train_ds(self):
+    def prepare_data(self) -> None:
+        self._train_ds.prepare_data()
+        self._val_ds.prepare_data()
+        self._test_ds.prepare_data()
+
+    def train_ds(self) -> MTLDataset:
         return MTLDataset([TensorDataset(torch.rand(12808, 10), torch.randint(10, (12808,))),
                            TensorDataset(torch.rand(64003, 9), torch.randint(10, (64003,))),
                            TensorDataset(torch.rand(32004, 7), torch.randint(10, (32004,)))])
