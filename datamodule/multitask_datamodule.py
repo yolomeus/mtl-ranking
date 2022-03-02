@@ -1,5 +1,7 @@
+from collections import defaultdict
 from typing import Optional
 
+import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
@@ -66,7 +68,7 @@ class MTLDataModule(LightningDataModule):
         """Override to define a custom collate function. Build a function for collating multiple data instances into
         a batch. Defaults to returning `None` since it's the default for DataLoader's collate_fn argument.
 
-        While different collate functions might be needed depending on the _dataset split, in most cases the same
+        While different collate functions might be needed depending on the dataset split, in most cases the same
         function can be returned for all data splits.
 
         :param split: The split that the collate function is used on to build batches. Can be ignored when train and
@@ -76,7 +78,14 @@ class MTLDataModule(LightningDataModule):
         """
 
         def collate(batch):
-            print('todo')
-            return batch
+            dataset_to_batch = defaultdict(list)
+            for item in batch:
+                dataset_to_batch[item['name']].append(item['x'])
+
+            for key in dataset_to_batch.keys():
+                dataset_to_batch[key] = torch.stack(dataset_to_batch[key])
+
+            labels = torch.stack(list(map(lambda x: x['y'], batch)))
+            return dataset_to_batch, labels
 
         return collate
