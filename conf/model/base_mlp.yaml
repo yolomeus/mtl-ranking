@@ -1,6 +1,6 @@
 _target_: model.mlp.MLP
 
-in_dim: 10
+in_dim: ???
 h_dim: 256
-out_dim: 10
+out_dim: 256
 dropout: 0.2

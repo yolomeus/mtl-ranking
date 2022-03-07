@@ -19,9 +19,9 @@ class MTLDataModule(LightningDataModule):
         self._num_workers = num_workers
         self._pin_memory = pin_memory
 
-        self._dataset = MTLDataset([DummyDataset(12808, 10, 10, 'dummy_00'),
-                                    DummyDataset(64003, 9, 10, 'dummy_01'),
-                                    DummyDataset(32004, 7, 10, 'dummy_02')])
+        self._dataset = MTLDataset([DummyDataset(12808, 10, 5, 'dummy_00'),
+                                    DummyDataset(64003, 9, 3, 'dummy_01'),
+                                    DummyDataset(32004, 7, 2, 'dummy_02')])
 
         self._train_ds = None
         self._val_ds = None

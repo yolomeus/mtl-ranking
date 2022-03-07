@@ -1,0 +1,6 @@
+defaults:
+  - input_modules/dummy_00@dummy_00
+  - input_modules/dummy_01@dummy_01
+  - input_modules/dummy_02@dummy_02
+
+_target_: model.multitask.MultiModule

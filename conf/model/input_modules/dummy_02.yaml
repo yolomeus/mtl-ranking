@@ -1,0 +1,4 @@
+defaults:
+  - /model/base_mlp@_here_
+
+in_dim: 7
