@@ -1,10 +1,13 @@
 """Training loop related utilities.
 """
-from typing import List
+from copy import deepcopy
+from typing import List, Dict
 
 from hydra.utils import instantiate
 from omegaconf import DictConfig
-from torch.nn import Module, ModuleList, Softmax, Sigmoid, Identity
+from pytorch_lightning import LightningModule
+from torch import Tensor
+from torch.nn import Module, ModuleList, ModuleDict, Softmax, Sigmoid, Identity
 
 from datamodule import DatasetSplit
 
@@ -73,3 +76,50 @@ class Metrics(Module):
         """
         name = obj.__class__.__name__
         return name.lower() if lower else name
+
+
+class MultiTaskMetrics(Metrics):
+    def __init__(self, model_output_names: List[str],
+                 loss: Module,
+                 metrics_configs: List[DictConfig],
+                 to_probabilities: str):
+        """
+
+        :param model_output_names:
+        :param loss:
+        :param metrics_configs:
+        :param to_probabilities:
+        """
+        super().__init__(loss, metrics_configs, to_probabilities)
+
+        self.model_output_names = model_output_names
+
+        self.output_to_train = ModuleDict({name: deepcopy(self.train_metrics) for name in model_output_names})
+        self.output_to_val = ModuleDict({name: deepcopy(self.val_metrics) for name in model_output_names})
+        self.output_to_test = ModuleDict({name: deepcopy(self.test_metrics) for name in model_output_names})
+
+    def forward(self, loop: LightningModule, y_pred: Dict[str, Tensor], y_true: Tensor, split: DatasetSplit):
+
+        for name in y_pred.keys():
+            y_prob = self._to_probabilities(y_pred[name])
+
+            if split == DatasetSplit.TRAIN:
+                metrics = self.output_to_train[name]
+            elif split == DatasetSplit.TEST:
+                metrics = self.output_to_val[name]
+            else:
+                metrics = self.output_to_test[name]
+
+            for metric in metrics:
+                metric(y_prob, y_true)
+                loop.log(f'{split.value}/' + self.classname(metric),
+                         metric,
+                         on_step=False,
+                         on_epoch=True,
+                         batch_size=len(y_true))
+
+        loss = self.loss(y_pred, y_true)
+        loop.log(f'{split.value}/loss', loss, on_step=False, on_epoch=True, batch_size=len(y_true))
+
+        if split == DatasetSplit.TRAIN:
+            return loss
