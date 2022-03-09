@@ -111,15 +111,15 @@ class MultiTaskMetrics(Metrics):
                 metrics = self.output_to_test[name]
 
             for metric in metrics:
-                metric(y_prob, y_true)
+                metric(y_prob, y_true[name])
                 loop.log(f'{split.value}/' + self.classname(metric),
                          metric,
                          on_step=False,
                          on_epoch=True,
-                         batch_size=len(y_true))
+                         batch_size=len(y_true[name]))
 
         loss = self.loss(y_pred, y_true)
-        loop.log(f'{split.value}/loss', loss, on_step=False, on_epoch=True, batch_size=len(y_true))
+        loop.log(f'{split.value}/loss', loss, on_step=False, on_epoch=True)
 
         if split == DatasetSplit.TRAIN:
             return loss

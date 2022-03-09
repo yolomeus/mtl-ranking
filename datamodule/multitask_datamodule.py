@@ -79,13 +79,16 @@ class MTLDataModule(LightningDataModule):
 
         def collate(batch):
             dataset_to_batch = defaultdict(list)
+            dataset_to_label = defaultdict(list)
+
             for item in batch:
                 dataset_to_batch[item['name']].append(item['x'])
+                dataset_to_label[item['name']].append(item['y'])
 
-            for key in dataset_to_batch.keys():
-                dataset_to_batch[key] = torch.stack(dataset_to_batch[key])
+            for name in dataset_to_batch.keys():
+                dataset_to_batch[name] = torch.stack(dataset_to_batch[name])
+                dataset_to_label[name] = torch.stack(dataset_to_label[name])
 
-            labels = torch.stack(list(map(lambda x: x['y'], batch)))
-            return dataset_to_batch, labels
+            return dataset_to_batch, dataset_to_label
 
         return collate
