@@ -10,7 +10,8 @@ from torch.nn import Module
 from torch.optim import Optimizer
 
 from datamodule import DatasetSplit
-from logger.utils import Metrics
+from logger.utils import MultiTaskMetrics
+from model.multitask import MultiTaskModel
 
 
 class AbstractBaseLoop(LightningModule, ABC):
@@ -18,25 +19,29 @@ class AbstractBaseLoop(LightningModule, ABC):
     """
 
     def __init__(self, hparams: DictConfig):
+        """
+        :param hparams: contains all hyperparameters to be logged before training.
+        """
         super().__init__()
         self.save_hyperparameters(hparams)
 
 
-class DefaultClassificationLoop(AbstractBaseLoop):
+# noinspection PyAbstractClass
+class MultiTaskLoop(AbstractBaseLoop):
     """Default wrapper for training/testing a pytorch module using pytorch-lightning. Assumes a standard classification
     task with instance-label pairs (x, y) and a loss function that has the signature loss(y_pred, y_true).
     """
 
-    def __init__(self, hparams: DictConfig, model: Module, optimizer: Optimizer, loss: Module):
-        """
-        :param hparams: contains all hyperparameters.
-        """
+    def __init__(self, hparams: DictConfig, model: MultiTaskModel, optimizer: Optimizer, loss: Module):
         super().__init__(hparams)
 
         self.model = model
         self.loss = loss
         self.optimizer = optimizer
-        self.metrics = Metrics(self.loss, hparams.metrics.metrics_list, hparams.metrics.to_probabilities)
+        self.metrics = MultiTaskMetrics(self.model.output_names,
+                                        self.loss,
+                                        hparams.metrics.metrics_list,
+                                        hparams.metrics.to_probabilities)
 
     def configure_optimizers(self):
         return self.optimizer
