@@ -15,6 +15,10 @@ class MultiModule(Module):
     def forward(self, inputs, module_name: str):
         return self.in_modules[module_name](inputs)
 
+    @property
+    def module_names(self):
+        return [name for name in self.in_modules.keys()]
+
 
 class MultiTaskModel(Module):
     """A model consisting of multiple input and head modules, each grouped into a `MultiModel` and a single body module.
@@ -47,3 +51,7 @@ class MultiTaskModel(Module):
                  for name, x in zip(name_to_batch, hidden_batches)}
 
         return preds
+
+    @property
+    def output_names(self):
+        return self.head_module.module_names
