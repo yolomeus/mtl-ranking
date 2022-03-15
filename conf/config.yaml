@@ -26,7 +26,6 @@ metrics:
   metrics_list:
     - _target_: torchmetrics.Accuracy
     - _target_: torchmetrics.F1Score
-      num_classes: 10
 
 logger:
   _target_: logger.loggers.WandbMinMaxLogger
