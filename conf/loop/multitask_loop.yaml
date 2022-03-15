@@ -1,5 +1,5 @@
 defaults:
-  - loss: cross_entropy
+  - loss: sum_loss
   - optimizer: adam
 
 _target_: loop.MultiTaskLoop
