@@ -98,28 +98,29 @@ class MultiTaskMetrics(Metrics):
         self.output_to_val = ModuleDict({name: deepcopy(self.val_metrics) for name in model_output_names})
         self.output_to_test = ModuleDict({name: deepcopy(self.test_metrics) for name in model_output_names})
 
-    def forward(self, loop: LightningModule, y_pred: Dict[str, Tensor], y_true: Tensor, split: DatasetSplit):
+    def forward(self, loop: LightningModule, y_pred: Dict[str, Tensor], y_true: Dict[str, Tensor], split: DatasetSplit):
 
-        for name in y_pred.keys():
-            y_prob = self._to_probabilities(y_pred[name])
+        for dataset_name in y_pred.keys():
+            y_prob = self._to_probabilities(y_pred[dataset_name])
 
             if split == DatasetSplit.TRAIN:
-                metrics = self.output_to_train[name]
+                metrics = self.output_to_train[dataset_name]
             elif split == DatasetSplit.TEST:
-                metrics = self.output_to_val[name]
+                metrics = self.output_to_val[dataset_name]
             else:
-                metrics = self.output_to_test[name]
+                metrics = self.output_to_test[dataset_name]
 
             for metric in metrics:
-                metric(y_prob, y_true[name])
-                loop.log(f'{split.value}/' + self.classname(metric),
+                metric(y_prob, y_true[dataset_name])
+                loop.log(f'{split.value}/{self.classname(metric)}/{dataset_name}',
                          metric,
                          on_step=False,
                          on_epoch=True,
-                         batch_size=len(y_true[name]))
+                         batch_size=len(y_true[dataset_name]))
 
         loss = self.loss(y_pred, y_true)
-        loop.log(f'{split.value}/loss', loss, on_step=False, on_epoch=True)
+        total_batch_size = sum([len(x) for x in y_true.values()])
+        loop.log(f'{split.value}/loss', loss, on_step=False, on_epoch=True, batch_size=total_batch_size)
 
         if split == DatasetSplit.TRAIN:
             return loss
