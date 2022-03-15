@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import List, Union, Sized
+from typing import List, Union, Sized, Tuple
 
 import torch
 from torch.utils.data import Dataset, TensorDataset
@@ -10,22 +10,26 @@ from datamodule import DatasetSplit
 
 
 class PreparedDataset(Dataset, ABC):
+    """Dataset to be used within a pytorch lightning datamodule. Exposes interface for preparing data and returning a
+    dataset split.
+    """
+
     def __init__(self, name):
         self.name = name
 
     @abstractmethod
     def prepare_data(self):
-        """
+        """To be called in LightningDatamodule's prepare_data() method.
 
         :return:
         """
 
     @abstractmethod
     def _get_split(self, split: DatasetSplit):
-        """
+        """Return the corresponding split of this dataset.
 
-        :param split:
-        :return:
+        :param split: the split to return.
+        :return: a pytorch dataset representing the selected split
         """
 
     def get_split(self, split: DatasetSplit):
@@ -33,7 +37,7 @@ class PreparedDataset(Dataset, ABC):
 
 
 class MTLDataset(PreparedDataset):
-    """Combines multiple datasets into a single Multi-Task _dataset.
+    """Combines multiple datasets into a single Multi-Task dataset.
     """
 
     def __init__(self, datasets: List[Union[PreparedDataset, Sized]], name='MTL'):
@@ -47,11 +51,11 @@ class MTLDataset(PreparedDataset):
 
         self._dataset_sizes = None
 
-    def __getitem__(self, indices):
+    def __getitem__(self, indices: Tuple[int, int]):
         """
 
-        :param indices:
-        :return:
+        :param indices: a tuple of dataset index and sample index for that dataset.
+        :return: a dict: {'x': input, 'y': label, 'name': dataset.name}
         """
         dataset_idx, sample_idx = indices
         dataset = self.datasets[dataset_idx]
@@ -77,6 +81,9 @@ class MTLDataset(PreparedDataset):
 
 
 class DummyDataset(PreparedDataset):
+    """Randomly generated dummy dataset.
+    """
+
     def __init__(self, size, num_features, num_classes, name):
         super().__init__(name)
         self._size = size
