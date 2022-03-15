@@ -77,18 +77,19 @@ class MTLDataModule(LightningDataModule):
         tuple of multiple batch tensors.
         """
 
-        def collate(batch):
-            dataset_to_batch = defaultdict(list)
-            dataset_to_label = defaultdict(list)
+        return self.collate
 
-            for item in batch:
-                dataset_to_batch[item['name']].append(item['x'])
-                dataset_to_label[item['name']].append(item['y'])
+    @staticmethod
+    def collate(batch):
+        dataset_to_batch = defaultdict(list)
+        dataset_to_label = defaultdict(list)
 
-            for name in dataset_to_batch.keys():
-                dataset_to_batch[name] = torch.stack(dataset_to_batch[name])
-                dataset_to_label[name] = torch.stack(dataset_to_label[name])
+        for item in batch:
+            dataset_to_batch[item['name']].append(item['x'])
+            dataset_to_label[item['name']].append(item['y'])
 
-            return dataset_to_batch, dataset_to_label
+        for name in dataset_to_batch.keys():
+            dataset_to_batch[name] = torch.stack(dataset_to_batch[name])
+            dataset_to_label[name] = torch.stack(dataset_to_label[name])
 
-        return collate
+        return dataset_to_batch, dataset_to_label
