@@ -1,8 +1,7 @@
 defaults:
-  - model: mlp
+  - model: multitask_model
   - datamodule: multitask
-  - loop: default_loop
-
+  - loop: multitask_loop
 
 gpus: 1
 num_workers: 0
