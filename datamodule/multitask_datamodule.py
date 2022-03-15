@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from datamodule import DatasetSplit
 from datamodule.dataset import DummyDataset, MTLDataset
-from datamodule.sampler import RoundRobin
+from datamodule.sampler import RoundRobin, SequentialMultiTask
 
 
 class MTLDataModule(LightningDataModule):
@@ -19,9 +19,9 @@ class MTLDataModule(LightningDataModule):
         self._num_workers = num_workers
         self._pin_memory = pin_memory
 
-        self._dataset = MTLDataset([DummyDataset(12808, 10, 5, 'dummy_00'),
-                                    DummyDataset(64003, 9, 3, 'dummy_01'),
-                                    DummyDataset(32004, 7, 2, 'dummy_02')])
+        self._dataset = MTLDataset([DummyDataset(1280, 10, 5, 'dummy_00'),
+                                    DummyDataset(6400, 9, 3, 'dummy_01'),
+                                    DummyDataset(3200, 7, 2, 'dummy_02')])
 
         self._train_ds = None
         self._val_ds = None
@@ -51,7 +51,8 @@ class MTLDataModule(LightningDataModule):
                             num_workers=self._num_workers,
                             pin_memory=self._pin_memory,
                             collate_fn=self.build_collate_fn(DatasetSplit.VALIDATION),
-                            persistent_workers=self._num_workers > 0)
+                            persistent_workers=self._num_workers > 0,
+                            sampler=SequentialMultiTask(self._val_ds))
         return val_dl
 
     def test_dataloader(self):
@@ -60,11 +61,11 @@ class MTLDataModule(LightningDataModule):
                              num_workers=self._num_workers,
                              pin_memory=self._pin_memory,
                              collate_fn=self.build_collate_fn(DatasetSplit.TEST),
-                             persistent_workers=self._num_workers > 0)
+                             persistent_workers=self._num_workers > 0,
+                             sampler=SequentialMultiTask(self._test_ds))
         return test_dl
 
-    @staticmethod
-    def build_collate_fn(split: DatasetSplit = None):
+    def build_collate_fn(self, split: DatasetSplit = None):
         """Override to define a custom collate function. Build a function for collating multiple data instances into
         a batch. Defaults to returning `None` since it's the default for DataLoader's collate_fn argument.
 

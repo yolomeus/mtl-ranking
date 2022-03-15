@@ -58,3 +58,20 @@ class RoundRobin(Sampler):
 
     def __len__(self):
         return self._max_ds_len * self.num_datasets
+
+
+class SequentialMultiTask(Sampler):
+    """Sequentially iterates over all instances in each dataset of a multitask-dataset.
+    """
+
+    def __init__(self, data_source: MTLDataset):
+        super().__init__(data_source)
+        self.data_source = data_source
+
+    def __iter__(self) -> Iterator[T_co]:
+        for ds_idx in range(self.data_source.num_datasets):
+            for sample_idx in range(self.data_source.dataset_sizes[ds_idx]):
+                yield ds_idx, sample_idx
+
+    def __len__(self):
+        return sum(self.data_source.dataset_sizes)
