@@ -52,10 +52,7 @@ def train(cfg: DictConfig):
                       accumulate_grad_batches=train_cfg.accumulate_batches)
 
     datamodule = instantiate(cfg.datamodule,
-                             train_conf=cfg.training,
-                             test_conf=cfg.testing,
-                             num_workers=cfg.num_workers,
-                             pin_memory=cfg.gpus > 0)
+                             _recursive_=False)
 
     trainer.fit(training_loop, datamodule=datamodule)
 

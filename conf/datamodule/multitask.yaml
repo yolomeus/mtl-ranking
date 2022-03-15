@@ -1,1 +1,12 @@
+defaults:
+  - sampler/round_robin@train_sampler_cfg
+  - sampler/sequential@val_sampler_cfg
+  - sampler/sequential@test_sampler_cfg
+
 _target_: datamodule.multitask_datamodule.MTLDataModule
+
+train_batch_size: ${training.batch_size}
+test_batch_size: ${testing.batch_size}
+
+num_workers: ${num_workers}
+pin_memory: True

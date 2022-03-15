@@ -2,20 +2,29 @@ from collections import defaultdict
 from typing import Optional
 
 import torch
+from hydra.utils import instantiate
+from omegaconf import DictConfig
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
 from datamodule import DatasetSplit
 from datamodule.dataset import DummyDataset, MTLDataset
-from datamodule.sampler import RoundRobin, SequentialMultiTask
 
 
 class MTLDataModule(LightningDataModule):
-    def __init__(self, train_conf, test_conf, num_workers, pin_memory):
+    def __init__(self,
+                 train_batch_size: int,
+                 test_batch_size: int,
+                 num_workers: int,
+                 pin_memory: bool,
+                 train_sampler_cfg: DictConfig,
+                 val_sampler_cfg: DictConfig,
+                 test_sampler_cfg: DictConfig):
         super().__init__()
 
-        self._train_conf = train_conf
-        self._test_conf = test_conf
+        self._train_batch_size = train_batch_size
+        self._test_batch_size = test_batch_size
+
         self._num_workers = num_workers
         self._pin_memory = pin_memory
 
@@ -27,6 +36,14 @@ class MTLDataModule(LightningDataModule):
         self._val_ds = None
         self._test_ds = None
 
+        self._train_sampler_cfg = train_sampler_cfg
+        self._val_sampler_cfg = val_sampler_cfg
+        self._test_sampler_cfg = test_sampler_cfg
+
+        self._train_sampler = None
+        self._val_sampler = None
+        self._test_sampler = None
+
     def prepare_data(self) -> None:
         self._dataset.prepare_data()
 
@@ -35,34 +52,38 @@ class MTLDataModule(LightningDataModule):
         self._val_ds = self._dataset.get_split(DatasetSplit.VALIDATION)
         self._test_ds = self._dataset.get_split(DatasetSplit.TEST)
 
+        self._train_sampler = instantiate(self._train_sampler_cfg, data_source=self._train_ds)
+        self._val_sampler = instantiate(self._val_sampler_cfg, data_source=self._val_ds)
+        self._test_sampler = instantiate(self._test_sampler_cfg, data_source=self._test_ds)
+
     def train_dataloader(self):
         train_dl = DataLoader(self._train_ds,
-                              self._train_conf.batch_size,
+                              self._train_batch_size,
                               num_workers=self._num_workers,
                               pin_memory=self._pin_memory,
                               collate_fn=self.build_collate_fn(DatasetSplit.TRAIN),
                               persistent_workers=self._num_workers > 0,
-                              sampler=RoundRobin(self._train_conf.batch_size, self._train_ds))
+                              sampler=self._train_sampler)
         return train_dl
 
     def val_dataloader(self):
         val_dl = DataLoader(self._val_ds,
-                            self._test_conf.batch_size,
+                            self._test_batch_size,
                             num_workers=self._num_workers,
                             pin_memory=self._pin_memory,
                             collate_fn=self.build_collate_fn(DatasetSplit.VALIDATION),
                             persistent_workers=self._num_workers > 0,
-                            sampler=SequentialMultiTask(self._val_ds))
+                            sampler=self._val_sampler)
         return val_dl
 
     def test_dataloader(self):
         test_dl = DataLoader(self._test_ds,
-                             self._test_conf.batch_size,
+                             self._test_batch_size,
                              num_workers=self._num_workers,
                              pin_memory=self._pin_memory,
                              collate_fn=self.build_collate_fn(DatasetSplit.TEST),
                              persistent_workers=self._num_workers > 0,
-                             sampler=SequentialMultiTask(self._test_ds))
+                             sampler=self._test_sampler)
         return test_dl
 
     def build_collate_fn(self, split: DatasetSplit = None):

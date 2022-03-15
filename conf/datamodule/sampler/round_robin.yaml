@@ -1,0 +1,2 @@
+_target_: datamodule.sampler.RoundRobin
+batch_size: ${training.batch_size}
