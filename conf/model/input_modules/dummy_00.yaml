@@ -2,3 +2,4 @@ defaults:
   - /model/base_mlp@_here_
 
 in_dim: 10
+out_dim: ${model.body.out_dim}
