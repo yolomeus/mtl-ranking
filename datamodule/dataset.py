@@ -111,3 +111,95 @@ class DummyDataset(PreparedDataset):
                                 torch.randint(self._num_classes, (self._size,)))
 
         return self
+
+
+class TREC2019(PreparedDataset):
+
+    def __init__(self, name, data_file, train_file, val_file, test_file, qrels_file):
+
+        super().__init__(name)
+        self.name = name
+
+        self._data_file = to_absolute_path(data_file)
+
+        self._train_file = to_absolute_path(train_file)
+        self._val_file = to_absolute_path(val_file)
+        self._test_file = to_absolute_path(test_file)
+
+        self._qrels_file = to_absolute_path(qrels_file)
+
+        self.qid_to_pid_to_label = self._read_trec_qrels(self._qrels_file)
+        self.current_file = None
+
+        self.split = None
+
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+    def __getitem__(self, index):
+        with h5py.File(self.current_file, "r") as fp:
+            q_id = fp["q_ids"][index]
+            doc_id = fp["doc_ids"][index]
+
+            og_q_id = torch.tensor(self.get_original_query_id(q_id))
+            og_doc_id = torch.tensor(self.get_original_document_id(doc_id))
+
+            if self.split == DatasetSplit.TEST:
+                # for the test set we use the qrels file
+                label = self.qid_to_pid_to_label[int(og_q_id)].get(int(og_doc_id), 0)
+                label = torch.as_tensor([label])
+            else:
+                label = torch.tensor(fp["labels"][index]).unsqueeze(0).long()
+
+        with h5py.File(self._data_file, "r") as fp:
+            query = fp["queries"].asstr()[q_id]
+            doc = fp["docs"].asstr()[doc_id]
+
+        return {'q_id': og_q_id, 'doc_id': og_doc_id, 'x': (query, doc), 'y': label.squeeze()}
+
+    def __len__(self):
+        with h5py.File(self.current_file, "r") as fp:
+            return len(fp["q_ids"])
+
+    def prepare_data(self):
+        pass
+
+    def _get_split(self, split: DatasetSplit):
+        self.split = split
+
+        if split == DatasetSplit.TRAIN:
+            self.current_file = self._train_file
+        elif split == DatasetSplit.VALIDATION:
+            self.current_file = self._val_file
+        elif split == DatasetSplit.TEST:
+            self.current_file = self._test_file
+        else:
+            raise NotImplementedError()
+
+        return self
+
+    def get_original_query_id(self, q_id: int):
+        with h5py.File(self._data_file, "r") as fp:
+            return int(fp["orig_q_ids"].asstr()[q_id])
+
+    def get_original_document_id(self, doc_id: int):
+        with h5py.File(self._data_file, "r") as fp:
+            return int(fp["orig_doc_ids"].asstr()[doc_id])
+
+    @staticmethod
+    def _read_trec_qrels(qrels_file):
+        qrels = defaultdict(dict)
+        with open(qrels_file, 'r') as fp:
+            for q_id, _, p_id, label in csv.reader(fp, delimiter=' '):
+                q_id, p_id, label = map(int, [q_id, p_id, label])
+                qrels[q_id][p_id] = int(label)
+
+        return qrels
+
+    def collate(self, batch):
+        queries, docs = zip(*[x['x'] for x in batch])
+        tokenized = self.tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
+
+        labels = torch.stack([x['y'] for x in batch])
+        q_ids, doc_ids = torch.stack([x['q_id'] for x in batch]), torch.stack([x['doc_id'] for x in batch])
+
+        return {'x': tokenized, 'y': labels, 'meta': {'q_ids': q_ids, 'doc_ids': doc_ids}}
