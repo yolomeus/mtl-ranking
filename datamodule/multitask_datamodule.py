@@ -1,18 +1,17 @@
-from collections import defaultdict
+from functools import partial
 from typing import Optional
 
-import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
 from datamodule import DatasetSplit
-from datamodule.dataset import DummyDataset, MTLDataset
 
 
 class MTLDataModule(LightningDataModule):
     def __init__(self,
+                 dataset: DictConfig,
                  train_batch_size: int,
                  test_batch_size: int,
                  num_workers: int,
@@ -28,9 +27,7 @@ class MTLDataModule(LightningDataModule):
         self._num_workers = num_workers
         self._pin_memory = pin_memory
 
-        self._dataset = MTLDataset([DummyDataset(1280, 10, 5, 'dummy_00'),
-                                    DummyDataset(6400, 9, 3, 'dummy_01'),
-                                    DummyDataset(3200, 7, 2, 'dummy_02')])
+        self._dataset = instantiate(dataset)
 
         self._train_ds = None
         self._val_ds = None

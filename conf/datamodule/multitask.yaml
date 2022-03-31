@@ -1,4 +1,5 @@
 defaults:
+  - dataset: mtl
   - sampler/round_robin@train_sampler_cfg
   - sampler/sequential@val_sampler_cfg
   - sampler/sequential@test_sampler_cfg
