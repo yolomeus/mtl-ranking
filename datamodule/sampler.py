@@ -1,3 +1,4 @@
+from random import shuffle
 from typing import Iterator
 
 import torch
@@ -75,3 +76,23 @@ class SequentialMultiTask(Sampler):
 
     def __len__(self):
         return sum(self.data_source.dataset_sizes)
+
+
+class RandomProportional(Sampler):
+    def __init__(self, data_source: MTLDataset):
+        super().__init__(data_source)
+        self.data_source = data_source
+        self.indexes = []
+
+        for ds_idx in range(self.data_source.num_datasets):
+            for sample_idx in range(self.data_source.dataset_sizes[ds_idx]):
+                self.indexes.append((ds_idx, sample_idx))
+
+        shuffle(self.indexes)
+
+    def __iter__(self) -> Iterator[T_co]:
+        for ds_idx, sample_idx in self.indexes:
+            yield ds_idx, sample_idx
+
+    def __len__(self):
+        return len(self.indexes)
