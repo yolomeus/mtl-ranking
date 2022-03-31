@@ -47,18 +47,21 @@ class MultiTaskLoop(AbstractBaseLoop):
         return self.optimizer
 
     def training_step(self, batch, batch_idx):
-        x, y_true = batch
-        y_pred = self.model(x)
-        loss = self.metrics.metric_log(self, y_pred, y_true, DatasetSplit.TRAIN)
+        ds_to_inputs, ds_to_y_true, ds_to_meta = batch
+        y_pred = self.model(ds_to_inputs)
+
+        loss = self.loss(y_pred, ds_to_y_true)
+        total_batch_size = sum([len(x) for x in ds_to_y_true.values()])
+        self.log('train/loss', loss, on_step=False, on_epoch=True, batch_size=total_batch_size)
 
         return {'loss': loss}
 
     def validation_step(self, batch, batch_idx):
-        x, y_true = batch
-        y_pred = self.model(x)
-        self.metrics.metric_log(self, y_pred, y_true, DatasetSplit.VALIDATION)
+        ds_to_inputs, ds_to_y_true, ds_to_meta = batch
+        y_pred = self.model(ds_to_inputs)
+        self.metrics.metric_log(self, y_pred, ds_to_y_true, DatasetSplit.VALIDATION)
 
     def test_step(self, batch, batch_idx):
-        x, y_true = batch
-        y_pred = self.model(x)
-        self.metrics.metric_log(self, y_pred, y_true, DatasetSplit.TEST)
+        ds_to_inputs, ds_to_y_true, ds_to_meta = batch
+        y_pred = self.model(ds_to_inputs)
+        self.metrics.metric_log(self, y_pred, ds_to_y_true, DatasetSplit.TEST)
