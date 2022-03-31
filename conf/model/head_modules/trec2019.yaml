@@ -1,0 +1,10 @@
+defaults:
+  - pooler: average
+
+_target_: model.head.mlp.MLP
+h_dim: 128
+out_dim: 2
+dropout: 0.2
+
+pooler:
+  layer: 12
