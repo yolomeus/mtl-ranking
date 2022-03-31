@@ -285,6 +285,6 @@ class JSONDataset(PreparedDataset):
         queries, docs = zip(*[x['x'] for x in batch])
         tokenized = self.tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
 
-        labels = torch.stack([x['y'] for x in batch])
+        labels = torch.stack([x['y'] for x in batch]).unsqueeze(-1)
 
         return {'x': tokenized, 'y': labels}
