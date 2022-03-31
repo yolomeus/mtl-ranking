@@ -1,10 +1,18 @@
+import csv
+import json
 import logging
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from copy import deepcopy
-from typing import List, Union, Sized, Tuple
+from os import path
+from random import shuffle, Random
+from typing import Tuple
 
+import h5py
 import torch
+from hydra.utils import to_absolute_path
 from torch.utils.data import Dataset, TensorDataset
+from transformers import BertTokenizer
 
 from datamodule import DatasetSplit
 
@@ -203,3 +211,80 @@ class TREC2019(PreparedDataset):
         q_ids, doc_ids = torch.stack([x['q_id'] for x in batch]), torch.stack([x['doc_id'] for x in batch])
 
         return {'x': tokenized, 'y': labels, 'meta': {'q_ids': q_ids, 'doc_ids': doc_ids}}
+
+
+class JSONDataset(PreparedDataset):
+    def __init__(self, name, raw_file, train_file, val_file, test_file, num_train_samples,
+                 num_test_samples):
+        super().__init__(name)
+
+        self.num_train_samples = num_train_samples
+        self.num_test_samples = num_test_samples
+
+        self.raw_file = raw_file
+
+        self.train_file = to_absolute_path(train_file)
+        self.val_file = to_absolute_path(val_file)
+        self.test_file = to_absolute_path(test_file)
+
+        self.data = None
+
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+    def __getitem__(self, index):
+        x = self.data[index]
+        query, doc, label = x['input']['query'], x['input']['passage'], x['target']
+        return {'x': (query, doc), 'y': torch.tensor(label)}
+
+    def __len__(self):
+        return len(self.data)
+
+    def prepare_data(self):
+        raw_dataset = to_absolute_path(self.raw_file)
+        to_be_generated = list(map(to_absolute_path,
+                                   [self.train_file, self.val_file, self.test_file]))
+        if not all(map(path.exists, to_be_generated)):
+            with open(raw_dataset, 'r', encoding='utf8') as fp:
+                dataset = json.load(fp)
+
+            train_ds, val_ds, test_ds = self._split_ds(dataset)
+
+            with open(self.train_file, 'w', encoding='utf8') as train_fp, \
+                    open(self.val_file, 'w', encoding='utf8') as val_fp, \
+                    open(self.test_file, 'w', encoding='utf8') as test_fp:
+                json.dump(train_ds, train_fp)
+                json.dump(val_ds, val_fp)
+                json.dump(test_ds, test_fp)
+
+    def _get_split(self, split: DatasetSplit):
+        if split == DatasetSplit.TRAIN:
+            self.data = self._load_ds(self.train_file)
+        elif split == DatasetSplit.VALIDATION:
+            self.data = self._load_ds(self.val_file)
+        elif split == DatasetSplit.TEST:
+            self.data = self._load_ds(self.test_file)
+        else:
+            raise NotImplementedError
+
+        return self
+
+    def _split_ds(self, dataset):
+        shuffle(dataset, Random(5823905).random)
+        train_ds, val_ds = dataset[self.num_test_samples:], dataset[:self.num_test_samples]
+        train_ds = train_ds[:self.num_train_samples]
+        val_ds, test_ds = val_ds[len(val_ds) // 2:], val_ds[:len(val_ds) // 2]
+
+        return train_ds, val_ds, test_ds
+
+    @staticmethod
+    def _load_ds(ds_path):
+        with open(ds_path, 'r') as fp:
+            return json.load(fp)
+
+    def collate(self, batch):
+        queries, docs = zip(*[x['x'] for x in batch])
+        tokenized = self.tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
+
+        labels = torch.stack([x['y'] for x in batch])
+
+        return {'x': tokenized, 'y': labels}
