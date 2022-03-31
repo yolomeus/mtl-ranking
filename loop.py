@@ -52,7 +52,7 @@ class MultiTaskLoop(AbstractBaseLoop):
 
         loss = self.loss(y_pred, ds_to_y_true)
         total_batch_size = sum([len(x) for x in ds_to_y_true.values()])
-        self.log('train/loss', loss, on_step=False, on_epoch=True, batch_size=total_batch_size)
+        self.log('train/loss', loss.item(), on_step=False, on_epoch=True, batch_size=total_batch_size)
 
         return {'loss': loss}
 
