@@ -1,0 +1,4 @@
+_target_: model.body.bert.BERTHuggingFace
+model_name: bert-base-uncased
+num_layers: 12
+out_dim: 768
