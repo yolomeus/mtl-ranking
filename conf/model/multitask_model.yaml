@@ -1,7 +1,6 @@
 defaults:
-  - multitask_input@input_module
-  - body: dummy_body
-  - multitask_head@head_module
+  - body: bert_base_uncased
+  - head: multitask_head
 
 
 _target_: model.multitask.MultiTaskModel

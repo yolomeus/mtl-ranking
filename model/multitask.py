@@ -1,4 +1,3 @@
-import torch
 from torch.nn import Module, ModuleDict
 
 
@@ -21,15 +20,13 @@ class MultiModule(Module):
 
 
 class MultiTaskModel(Module):
-    """A model consisting of multiple input and head modules, each grouped into a `MultiModel` and a single body module.
+    """A model consisting of a body and multiple head modules with the latter being grouped into a `MultiModule`.
     """
 
-    def __init__(self, input_module: MultiModule, body: Module, head_module: MultiModule):
+    def __init__(self, body: Module, head: MultiModule):
         super().__init__()
-
-        self.input_module = input_module
         self.body = body
-        self.head_module = head_module
+        self.head = head
 
     def forward(self, name_to_batch: dict):
         """
@@ -38,20 +35,10 @@ class MultiTaskModel(Module):
 
         :return: a dict mapping from output module names to corresponding predictions.
         """
-        input_reps = [self.input_module(batch, name)
-                      for name, batch in name_to_batch.items()]
-
-        stacked_batch = torch.cat(input_reps, dim=0)
-        hidden_reps = self.body(stacked_batch)
-
-        batch_sizes = [len(x) for x in name_to_batch.values()]
-        hidden_batches = torch.split(hidden_reps, batch_sizes)
-
-        preds = {name: self.head_module(x, name)
-                 for name, x in zip(name_to_batch, hidden_batches)}
-
+        preds = {name: self.head(self.body(batch), name)
+                 for name, batch in name_to_batch.items()}
         return preds
 
     @property
     def output_names(self):
-        return self.head_module.module_names
+        return self.head.module_names
