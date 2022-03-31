@@ -1,8 +1,8 @@
 defaults:
   - dataset: mtl
-  - sampler/round_robin@train_sampler_cfg
-  - sampler/sequential@val_sampler_cfg
-  - sampler/sequential@test_sampler_cfg
+  - sampler@train_sampler_cfg: round_robin
+  - sampler@val_sampler_cfg: sequential
+  - sampler@test_sampler_cfg: sequential
 
 _target_: datamodule.multitask_datamodule.MTLDataModule
 
