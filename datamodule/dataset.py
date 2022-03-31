@@ -40,13 +40,14 @@ class MTLDataset(PreparedDataset):
     """Combines multiple datasets into a single Multi-Task dataset.
     """
 
-    def __init__(self, datasets: List[Union[PreparedDataset, Sized]], name='MTL'):
+    def __init__(self, name='MTL', **datasets):
         """
-
-        :param datasets:
+        :param name: name of this dataset.
+        :param datasets: named datasets as keyword arguments.
         """
         super().__init__(name)
-        self.datasets = datasets
+        self.datasets = list(datasets.values())
+        self.name_to_idx = {x: i for i, x in enumerate(list(datasets.keys()))}
         self.num_datasets = len(datasets)
 
         self._dataset_sizes = None
@@ -59,8 +60,9 @@ class MTLDataset(PreparedDataset):
         """
         dataset_idx, sample_idx = indices
         dataset = self.datasets[dataset_idx]
-        x, y = dataset[sample_idx]
-        return {'x': x, 'y': y, 'name': dataset.name}
+        x = {'name': dataset.name}
+        x.update(dataset[sample_idx])
+        return x
 
     def __len__(self):
         return sum(self.dataset_sizes)
@@ -78,6 +80,9 @@ class MTLDataset(PreparedDataset):
     def _get_split(self, split: DatasetSplit):
         self.datasets = [ds.get_split(split) for ds in self.datasets]
         return self
+
+    def collate(self, dataset_name, batch):
+        return self.datasets[self.name_to_idx[dataset_name]].collate(batch)
 
 
 class DummyDataset(PreparedDataset):
