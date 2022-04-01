@@ -1,3 +1,11 @@
+defaults:
+  - metrics@msm_bm25.metrics.train_metrics:
+      - mse
+  - metrics@msm_bm25.metrics.val_metrics:
+      - mse
+  - metrics@msm_bm25.metrics.test_metrics:
+      - mse
+
 msm_bm25:
   _target_: datamodule.dataset.JSONDataset
 
@@ -11,3 +19,8 @@ msm_bm25:
 
   num_train_samples: 9000
   num_test_samples: 1000
+
+  normalize_targets: true
+
+  to_probabilities:
+    _target_: torch.nn.Identity

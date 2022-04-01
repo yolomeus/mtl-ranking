@@ -1,6 +1,5 @@
 import csv
 import json
-import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from copy import deepcopy
@@ -11,7 +10,7 @@ from typing import Tuple
 import h5py
 import torch
 from hydra.utils import to_absolute_path
-from torch.utils.data import Dataset, TensorDataset
+from torch.utils.data import Dataset
 from transformers import BertTokenizer
 
 from datamodule import DatasetSplit
@@ -22,7 +21,11 @@ class PreparedDataset(Dataset, ABC):
     dataset split.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, metrics, to_probabilities):
+        if metrics is not None:
+            # only keep names of metrics
+            self.metrics = {split_name: [m for m in split] for split_name, split in metrics.items()}
+            self.to_probabilities = str(to_probabilities)
         self.name = name
 
     @abstractmethod
@@ -48,12 +51,12 @@ class MTLDataset(PreparedDataset):
     """Combines multiple datasets into a single Multi-Task dataset.
     """
 
-    def __init__(self, name='MTL', **datasets):
+    def __init__(self, datasets, name='MTL'):
         """
         :param name: name of this dataset.
         :param datasets: named datasets as keyword arguments.
         """
-        super().__init__(name)
+        super().__init__(name, None, None)
         self.datasets = list(datasets.values())
         self.name_to_idx = {x: i for i, x in enumerate(list(datasets.keys()))}
         self.num_datasets = len(datasets)
@@ -93,39 +96,11 @@ class MTLDataset(PreparedDataset):
         return self.datasets[self.name_to_idx[dataset_name]].collate(batch)
 
 
-class DummyDataset(PreparedDataset):
-    """Randomly generated dummy dataset.
-    """
-
-    def __init__(self, size, num_features, num_classes, name):
-        super().__init__(name)
-        self._size = size
-        self._num_features = num_features
-        self._num_classes = num_classes
-
-        self.ds = None
-
-    def __getitem__(self, index):
-        return self.ds.__getitem__(index)
-
-    def __len__(self):
-        return self.ds.__len__()
-
-    def prepare_data(self):
-        logging.getLogger(self.__class__.__name__).info('pretending to prepare data...')
-
-    def _get_split(self, split: DatasetSplit):
-        self.ds = TensorDataset(torch.rand(self._size, self._num_features),
-                                torch.randint(self._num_classes, (self._size,)))
-
-        return self
-
-
 class TREC2019(PreparedDataset):
 
-    def __init__(self, name, data_file, train_file, val_file, test_file, qrels_file):
+    def __init__(self, name, data_file, train_file, val_file, test_file, qrels_file, metrics, to_probabilities):
+        super().__init__(name, metrics, to_probabilities)
 
-        super().__init__(name)
         self.name = name
 
         self._data_file = to_absolute_path(data_file)
@@ -214,10 +189,12 @@ class TREC2019(PreparedDataset):
 
 
 class JSONDataset(PreparedDataset):
-    def __init__(self, name, raw_file, train_file, val_file, test_file, num_train_samples,
-                 num_test_samples):
-        super().__init__(name)
+    def __init__(self, raw_file, train_file, val_file, test_file, num_train_samples, num_test_samples,
+                 normalize_targets, name, metrics,
+                 to_probabilities):
+        super().__init__(name, metrics, to_probabilities)
 
+        self._normalize_targets = normalize_targets
         self.num_train_samples = num_train_samples
         self.num_test_samples = num_test_samples
 
@@ -248,6 +225,8 @@ class JSONDataset(PreparedDataset):
                 dataset = json.load(fp)
 
             train_ds, val_ds, test_ds = self._split_ds(dataset)
+            if self._normalize_targets:
+                train_ds, val_ds, test_ds = self.normalize_targets(train_ds, val_ds, test_ds)
 
             with open(self.train_file, 'w', encoding='utf8') as train_fp, \
                     open(self.val_file, 'w', encoding='utf8') as val_fp, \
@@ -255,6 +234,20 @@ class JSONDataset(PreparedDataset):
                 json.dump(train_ds, train_fp)
                 json.dump(val_ds, val_fp)
                 json.dump(test_ds, test_fp)
+
+    @staticmethod
+    def normalize_targets(train_ds, val_ds, test_ds):
+        train_max = max([x['target'] for x in train_ds])
+        train_min = min([x['target'] for x in train_ds])
+        for x in train_ds:
+            x['target'] = (x['target'] - train_min) / (train_max - train_min)
+
+        for ds in [val_ds, test_ds]:
+            for x in ds:
+                x['target'] = max(train_min, min(x['target'], train_max))
+                x['target'] = (x['target'] - train_min) / (train_max - train_min)
+
+        return train_ds, val_ds, test_ds
 
     def _get_split(self, split: DatasetSplit):
         if split == DatasetSplit.TRAIN:

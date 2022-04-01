@@ -1,6 +1,7 @@
 defaults:
-  - ../dataset@_here_:
+  - ../dataset@datasets:
       - msm_bm25
       - trec2019
 
 _target_: datamodule.dataset.MTLDataset
+

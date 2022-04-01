@@ -20,17 +20,9 @@ training:
 testing:
   batch_size: ${training.batch_size}
 
-metrics:
-  # apply before passing to metrics
-  to_probabilities: 'softmax'
-  metrics_list:
-    - _target_: torchmetrics.Accuracy
-    - _target_: torchmetrics.F1Score
-
 logger:
   _target_: logger.loggers.WandbMinMaxLogger
 log_gradients: False
-
 
 hydra:
   run:

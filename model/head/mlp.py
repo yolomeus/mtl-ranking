@@ -1,4 +1,4 @@
-from torch.nn import Linear, ReLU, Sequential, Dropout, Module
+from torch.nn import Linear, ReLU, Sequential, Dropout, Module, Sigmoid
 
 from model.head import MTLHead
 
@@ -6,7 +6,7 @@ from model.head import MTLHead
 class MLP(MTLHead):
     """Simple Multi-Layer Perceptron also known as Feed-Forward Neural Network."""
 
-    def __init__(self, h_dim: int, out_dim: int, dropout: float, pooler: Module):
+    def __init__(self, h_dim: int, out_dim: int, dropout: float, pooler: Module, sigmoid_out=False):
         """
         :param h_dim: hidden dimension
         :param out_dim: output dimension
@@ -19,6 +19,8 @@ class MLP(MTLHead):
                                      ReLU(),
                                      Dropout(dropout),
                                      Linear(h_dim, out_dim))
+        if sigmoid_out:
+            self.classifier.add_module('sig', Sigmoid())
 
     def _forward(self, inputs):
         x = self.classifier(inputs)

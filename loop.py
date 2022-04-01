@@ -3,9 +3,12 @@ encapsulate the model instead of being bound to it by inheritance. This way, the
 multiple different procedures, without having to duplicate model code by subclassing.
 """
 from abc import ABC
+from typing import Dict
 
+import torch
 from omegaconf import DictConfig
 from pytorch_lightning import LightningModule
+from torch import Tensor
 from torch.nn import Module
 from torch.optim import Optimizer
 
@@ -38,30 +41,39 @@ class MultiTaskLoop(AbstractBaseLoop):
         self.model = model
         self.loss = loss
         self.optimizer = optimizer
-        self.metrics = MultiTaskMetrics(self.model.output_names,
-                                        self.loss,
-                                        hparams.metrics.metrics_list,
-                                        hparams.metrics.to_probabilities)
+
+        dataset_cfgs = hparams.datamodule.dataset.datasets
+        self.metrics = MultiTaskMetrics(dataset_cfgs)
 
     def configure_optimizers(self):
         return self.optimizer
 
     def training_step(self, batch, batch_idx):
-        ds_to_inputs, ds_to_y_true, ds_to_meta = batch
-        y_pred = self.model(ds_to_inputs)
+        inputs, y_true, meta = batch
+        y_pred = self.model(inputs)
+        loss = self.loss(y_pred, y_true)
+        return {'loss': loss, 'y_true': y_true, 'y_pred': self._detach(y_pred)}
 
-        loss = self.loss(y_pred, ds_to_y_true)
-        total_batch_size = sum([len(x) for x in ds_to_y_true.values()])
-        self.log('train/loss', loss.item(), on_step=False, on_epoch=True, batch_size=total_batch_size)
-
-        return {'loss': loss}
+    def training_step_end(self, outputs):
+        with torch.no_grad():
+            self.metrics(self, outputs['y_pred'], outputs['y_true'], DatasetSplit.TRAIN)
 
     def validation_step(self, batch, batch_idx):
-        ds_to_inputs, ds_to_y_true, ds_to_meta = batch
-        y_pred = self.model(ds_to_inputs)
-        self.metrics.metric_log(self, y_pred, ds_to_y_true, DatasetSplit.VALIDATION)
+        inputs, y_true, meta = batch
+        y_pred = self.model(inputs)
+        return {'y_true': y_true, 'y_pred': self._detach(y_pred)}
+
+    def validation_step_end(self, outputs):
+        self.metrics(self, outputs['y_pred'], outputs['y_true'], DatasetSplit.VALIDATION)
 
     def test_step(self, batch, batch_idx):
-        ds_to_inputs, ds_to_y_true, ds_to_meta = batch
-        y_pred = self.model(ds_to_inputs)
-        self.metrics.metric_log(self, y_pred, ds_to_y_true, DatasetSplit.TEST)
+        inputs, y_true, meta = batch
+        y_pred = self.model(inputs)
+        return {'y_true': y_true, 'y_pred': self._detach(y_pred)}
+
+    def test_step_end(self, outputs):
+        self.metrics(self, outputs['y_pred'], outputs['y_true'], DatasetSplit.TEST)
+
+    @staticmethod
+    def _detach(preds: Dict[str, Tensor]):
+        return {k: v.detach() for k, v in preds.items()}

@@ -1,126 +1,56 @@
 """Training loop related utilities.
 """
-from copy import deepcopy
-from typing import List, Dict
+from collections import defaultdict
 
 from hydra.utils import instantiate
 from omegaconf import DictConfig
-from pytorch_lightning import LightningModule
-from torch import Tensor
-from torch.nn import Module, ModuleList, ModuleDict, Softmax, Sigmoid, Identity
+from torch.nn import Module, ModuleDict
 
 from datamodule import DatasetSplit
 
 
-class Metrics(Module):
-    """Stores and manages metrics during training/testing for log.
-    """
-
-    def __init__(self, loss: Module, metrics_configs: List[DictConfig], to_probabilities: str):
-        """
-
-        :param loss: the loss module for computing the loss metric.
-        :param metrics_configs: dict configs for each metric to instantiate.
-        :param to_probabilities: either 'sigmoid', 'softmax' or 'identity' (None), used to convert raw model predictions into
-        probabilities before passing them into a metric function.
-        """
+class MultiTaskMetrics(Module):
+    def __init__(self, dataset_cfgs: DictConfig):
         super().__init__()
 
-        per_split_metrics = [[] if metrics_configs is None else [instantiate(metric) for metric in metrics_configs]
-                             for _ in range(3)]
-        self.train_metrics, self.val_metrics, self.test_metrics = [ModuleList(metrics) for metrics in per_split_metrics]
-        self.loss = loss
-
-        if to_probabilities == 'sigmoid':
-            self._to_probabilities = Sigmoid()
-        elif to_probabilities == 'softmax':
-            self._to_probabilities = Softmax(dim=-1)
-
-        elif to_probabilities in [None, 'identity']:
-            self._to_probabilities = Identity()
+        self.metrics = self._build_metric_module(dataset_cfgs)
+        self.to_probabilites = ModuleDict({ds_name: instantiate(ds.to_probabilities)
+                                           for ds_name, ds in dataset_cfgs.items()})
 
     def forward(self, loop, y_pred, y_true, split: DatasetSplit):
-        y_prob = self._to_probabilities(y_pred)
-
-        if split == DatasetSplit.TRAIN:
-            metrics = self.train_metrics
-        elif split == DatasetSplit.TEST:
-            metrics = self.test_metrics
-        else:
-            metrics = self.val_metrics
-
-        for metric in metrics:
-            metric(y_prob, y_true)
-            loop.log(f'{split.value}/' + self.classname(metric),
-                     metric,
-                     on_step=False,
-                     on_epoch=True,
-                     batch_size=len(y_true))
-
-        loss = self.loss(y_pred, y_true)
-        loop.log(f'{split.value}/loss', loss, on_step=False, on_epoch=True, batch_size=len(y_true))
-
-        if split == DatasetSplit.TRAIN:
-            return loss
-
-    def metric_log(self, loop, y_pred, y_true, split: DatasetSplit):
-        return self.forward(loop, y_pred, y_true, split)
-
-    @staticmethod
-    def classname(obj, lower=True):
-        """Get the classname of an object.
-
-        :param obj: any python object.
-        :param lower: return the name in lowercase.
-        :return: the classname as string.
-        """
-        name = obj.__class__.__name__
-        return name.lower() if lower else name
-
-
-class MultiTaskMetrics(Metrics):
-    def __init__(self, model_output_names: List[str],
-                 loss: Module,
-                 metrics_configs: List[DictConfig],
-                 to_probabilities: str):
-        """
-
-        :param model_output_names:
-        :param loss:
-        :param metrics_configs:
-        :param to_probabilities:
-        """
-        super().__init__(loss, metrics_configs, to_probabilities)
-
-        self.model_output_names = model_output_names
-
-        self.output_to_train = ModuleDict({name: deepcopy(self.train_metrics) for name in model_output_names})
-        self.output_to_val = ModuleDict({name: deepcopy(self.val_metrics) for name in model_output_names})
-        self.output_to_test = ModuleDict({name: deepcopy(self.test_metrics) for name in model_output_names})
-
-    def forward(self, loop: LightningModule, y_pred: Dict[str, Tensor], y_true: Dict[str, Tensor], split: DatasetSplit):
+        total_batch_size = sum([len(x) for x in y_true.values()])
 
         for dataset_name in y_pred.keys():
-            y_prob = self._to_probabilities(y_pred[dataset_name])
+            y_prob = self.to_probabilites[dataset_name](y_pred[dataset_name])
 
-            if split == DatasetSplit.TRAIN:
-                metrics = self.output_to_train[dataset_name]
-            elif split == DatasetSplit.TEST:
-                metrics = self.output_to_val[dataset_name]
-            else:
-                metrics = self.output_to_test[dataset_name]
-
-            for metric in metrics:
-                metric(y_prob, y_true[dataset_name])
-                loop.log(f'{split.value}/{self.classname(metric)}/{dataset_name}',
+            metrics = self._select_metrics(dataset_name, split)
+            for name, metric in metrics.items():
+                metric.update(y_prob, y_true[dataset_name])
+                loop.log(f'{split.value}/{name}/{dataset_name}',
                          metric,
                          on_step=False,
                          on_epoch=True,
                          batch_size=len(y_true[dataset_name]))
 
-        loss = self.loss(y_pred, y_true)
-        total_batch_size = sum([len(x) for x in y_true.values()])
-        loop.log(f'{split.value}/loss', loss, on_step=False, on_epoch=True, batch_size=total_batch_size)
+        loss = loop.loss(y_pred, y_true)
+        loop.log(f'{split.value}/loss', loss.item(), on_step=False, on_epoch=True, batch_size=total_batch_size)
 
+    def _select_metrics(self, dataset_name, split):
         if split == DatasetSplit.TRAIN:
-            return loss
+            return self.metrics[dataset_name]['train_metrics']
+        elif split == DatasetSplit.TEST:
+            return self.metrics[dataset_name]['test_metrics']
+
+        return self.metrics[dataset_name]['val_metrics']
+
+    @staticmethod
+    def _build_metric_module(dataset_cfgs):
+        ds_to_metrics = defaultdict(dict)
+        for ds_name, ds_cfg in dataset_cfgs.items():
+            for split, metric_cfgs in ds_cfg.metrics.items():
+                ds_to_metrics[ds_name][split] = ModuleDict(
+                    {m_name: instantiate(m) for m_name, m in metric_cfgs.items()})
+
+            ds_to_metrics[ds_name] = ModuleDict(ds_to_metrics[ds_name])
+
+        return ModuleDict(ds_to_metrics)

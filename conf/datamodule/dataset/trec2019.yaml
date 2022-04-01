@@ -1,3 +1,13 @@
+defaults:
+  - metrics@trec2019.metrics.train_metrics:
+      - accuracy
+  - metrics@trec2019.metrics.val_metrics:
+      - f1score
+      - accuracy
+  - metrics@trec2019.metrics.test_metrics:
+      - f1score
+      - accuracy
+
 trec2019:
   _target_: datamodule.dataset.TREC2019
 
@@ -9,4 +19,7 @@ trec2019:
   test_file: data/trec/trecdl_passage_2019/fold_0/test.h5
 
   qrels_file: data/trec/trec_eval_files/2019qrels-pass.txt
+  to_probabilities:
+    _target_: torch.nn.Softmax
+    dim: -1
 
