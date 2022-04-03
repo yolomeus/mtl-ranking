@@ -1,5 +1,0 @@
-defaults:
-  - ../head_modules/trec2019@trec2019
-  - ../head_modules/msm_bm25@msm_bm25
-
-_target_: model.multitask.MultiModule
