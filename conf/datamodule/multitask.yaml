@@ -1,6 +1,6 @@
 defaults:
   - dataset: mtl
-  - sampler@train_sampler_cfg: round_robin
+  - sampler@train_sampler_cfg: random_proportional
   - sampler@val_sampler_cfg: sequential
   - sampler@test_sampler_cfg: sequential
 
