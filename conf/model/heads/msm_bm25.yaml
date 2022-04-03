@@ -8,4 +8,4 @@ dropout: 0.2
 sigmoid_out: true
 
 pooler:
-  layer: 5
+  layers: [ 5 ]

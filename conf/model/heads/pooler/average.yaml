@@ -1,4 +1,4 @@
 _target_: model.head.pooler.Average
 in_dim: ${model.body.out_dim}
 out_dim: ${.in_dim}
-layer: ???
+layers: ???
