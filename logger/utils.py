@@ -1,5 +1,6 @@
 """Training loop related utilities.
 """
+import inspect
 from collections import defaultdict
 
 from hydra.utils import instantiate
@@ -17,7 +18,7 @@ class MultiTaskMetrics(Module):
         self.to_probabilites = ModuleDict({ds_name: instantiate(ds.to_probabilities)
                                            for ds_name, ds in dataset_cfgs.items()})
 
-    def forward(self, loop, y_pred, y_true, split: DatasetSplit):
+    def forward(self, loop, y_pred, y_true, meta, split: DatasetSplit):
         total_batch_size = sum([len(x) for x in y_true.values()])
 
         for dataset_name in y_pred.keys():
@@ -25,7 +26,9 @@ class MultiTaskMetrics(Module):
 
             metrics = self._select_metrics(dataset_name, split)
             for name, metric in metrics.items():
-                metric.update(y_prob, y_true[dataset_name])
+                meta_args = self._get_meta_args(metric, dataset_name, meta)
+                metric.update(y_prob, y_true[dataset_name], **meta_args)
+
                 loop.log(f'{split.value}/{name}/{dataset_name}',
                          metric,
                          on_step=False,
@@ -54,3 +57,12 @@ class MultiTaskMetrics(Module):
             ds_to_metrics[ds_name] = ModuleDict(ds_to_metrics[ds_name])
 
         return ModuleDict(ds_to_metrics)
+
+    @staticmethod
+    def _get_meta_args(metric, dataset_name, meta):
+        meta_args = {}
+        if meta[dataset_name] is not None:
+            valid_args = inspect.signature(metric.update).parameters.keys()
+            meta_args = {k: v for k, v in meta[dataset_name].items() if k in valid_args}
+
+        return meta_args

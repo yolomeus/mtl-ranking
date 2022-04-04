@@ -52,27 +52,27 @@ class MultiTaskLoop(AbstractBaseLoop):
         inputs, y_true, meta = batch
         y_pred = self.model(inputs)
         loss = self.loss(y_pred, y_true)
-        return {'loss': loss, 'y_true': y_true, 'y_pred': self._detach(y_pred)}
+        return {'loss': loss, 'y_true': y_true, 'y_pred': self._detach(y_pred), 'meta': meta}
 
     def training_step_end(self, outputs):
         with torch.no_grad():
-            self.metrics(self, outputs['y_pred'], outputs['y_true'], DatasetSplit.TRAIN)
+            self.metrics(self, outputs['y_pred'], outputs['y_true'], outputs['meta'], DatasetSplit.TRAIN)
 
     def validation_step(self, batch, batch_idx):
         inputs, y_true, meta = batch
         y_pred = self.model(inputs)
-        return {'y_true': y_true, 'y_pred': self._detach(y_pred)}
+        return {'y_true': y_true, 'y_pred': self._detach(y_pred), 'meta': meta}
 
     def validation_step_end(self, outputs):
-        self.metrics(self, outputs['y_pred'], outputs['y_true'], DatasetSplit.VALIDATION)
+        self.metrics(self, outputs['y_pred'], outputs['y_true'], outputs['meta'], DatasetSplit.VALIDATION)
 
     def test_step(self, batch, batch_idx):
         inputs, y_true, meta = batch
         y_pred = self.model(inputs)
-        return {'y_true': y_true, 'y_pred': self._detach(y_pred)}
+        return {'y_true': y_true, 'y_pred': self._detach(y_pred), 'meta': meta}
 
     def test_step_end(self, outputs):
-        self.metrics(self, outputs['y_pred'], outputs['y_true'], DatasetSplit.TEST)
+        self.metrics(self, outputs['y_pred'], outputs['y_true'], outputs['meta'], DatasetSplit.TEST)
 
     @staticmethod
     def _detach(preds: Dict[str, Tensor]):

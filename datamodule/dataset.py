@@ -126,10 +126,14 @@ class TREC2019(PreparedDataset):
             og_q_id = torch.tensor(self.get_original_query_id(q_id))
             og_doc_id = torch.tensor(self.get_original_document_id(doc_id))
 
+            label_rank = None
             if self.split == DatasetSplit.TEST:
                 # for the test set we use the qrels file
                 label = self.qid_to_pid_to_label[int(og_q_id)].get(int(og_doc_id), 0)
-                label = torch.as_tensor([label])
+                label_rank = torch.tensor(label)
+                label_bin = int(label >= 1)
+                label = torch.tensor([label_bin])
+
             else:
                 label = torch.tensor(fp["labels"][index]).unsqueeze(0).long()
 
@@ -137,7 +141,10 @@ class TREC2019(PreparedDataset):
             query = fp["queries"].asstr()[q_id]
             doc = fp["docs"].asstr()[doc_id]
 
-        return {'q_id': og_q_id, 'doc_id': og_doc_id, 'x': (query, doc), 'y': label.squeeze()}
+        x = {'q_id': og_q_id, 'doc_id': og_doc_id, 'x': (query, doc), 'y': label.squeeze()}
+        if label_rank is not None:
+            x['y_rank'] = label_rank
+        return x
 
     def __len__(self):
         with h5py.File(self.current_file, "r") as fp:
@@ -183,9 +190,15 @@ class TREC2019(PreparedDataset):
         tokenized = self.tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
 
         labels = torch.stack([x['y'] for x in batch])
-        q_ids, doc_ids = torch.stack([x['q_id'] for x in batch]), torch.stack([x['doc_id'] for x in batch])
+        q_ids = torch.stack([x['q_id'] for x in batch])
 
-        return {'x': tokenized, 'y': labels, 'meta': {'q_ids': q_ids, 'doc_ids': doc_ids}}
+        x = {'x': tokenized, 'y': labels, 'meta': {'indexes': q_ids}}
+
+        if batch[0].get('y_rank', None) is not None:
+            y_rank = torch.stack([x['y_rank'] for x in batch])
+            x['meta']['y_rank'] = y_rank
+
+        return x
 
 
 class JSONDataset(PreparedDataset):
