@@ -1,12 +1,23 @@
 defaults:
   - metrics@trec2019.metrics.train_metrics:
       - accuracy
+      - f1score
   - metrics@trec2019.metrics.val_metrics:
-      - f1score
       - accuracy
+      - f1score
+      - precision@10
+      - precision@20
+      - mrr
+      - map
   - metrics@trec2019.metrics.test_metrics:
-      - f1score
       - accuracy
+      - f1score
+      - precision@10
+      - precision@20
+      - mrr
+      - trec_map
+      - trec_ndcg@10
+      - trec_ndcg@20
 
 trec2019:
   _target_: datamodule.dataset.TREC2019
