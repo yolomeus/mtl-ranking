@@ -34,3 +34,14 @@ trec2019:
     _target_: torch.nn.Softmax
     dim: -1
 
+  # override num_classes for this dataset
+  metrics:
+    train_metrics:
+      f1score:
+        num_classes: 2
+    val_metrics:
+      f1score:
+        num_classes: 2
+    test_metrics:
+      f1score:
+        num_classes: 2
