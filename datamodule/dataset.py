@@ -5,11 +5,12 @@ from collections import defaultdict
 from copy import deepcopy
 from os import path
 from random import shuffle, Random
-from typing import Tuple
+from typing import Tuple, Dict
 
 import h5py
 import torch
 from hydra.utils import to_absolute_path
+from torch import ModuleDict, Module
 from torch.utils.data import Dataset
 from transformers import BertTokenizer
 
@@ -21,7 +22,14 @@ class PreparedDataset(Dataset, ABC):
     dataset split.
     """
 
-    def __init__(self, name, metrics, to_probabilities):
+    def __init__(self, name: str, metrics: Dict[str, ModuleDict], to_probabilities: Module):
+        """
+
+        :param name: name of the dataset.
+        :param metrics: mapping from split name to a ModuleDict of metric modules to be used for this dataset.
+        :param to_probabilities: the module used for converting predictions to a probability distribution to fit this
+        dataset's labels.
+        """
         if metrics is not None:
             # only keep names of metrics
             self.metrics = {split_name: [m for m in split] for split_name, split in metrics.items()}
@@ -30,9 +38,8 @@ class PreparedDataset(Dataset, ABC):
 
     @abstractmethod
     def prepare_data(self):
-        """To be called in LightningDatamodule's prepare_data() method.
-
-        :return:
+        """To be called in LightningDatamodule's prepare_data() method. Used for downloading, pre-processing or similar.
+        Do not assign state from this method.
         """
 
     @abstractmethod
@@ -40,7 +47,7 @@ class PreparedDataset(Dataset, ABC):
         """Return the corresponding split of this dataset.
 
         :param split: the split to return.
-        :return: a pytorch dataset representing the selected split
+        :return: a pytorch dataset representing the selected split.
         """
 
     def get_split(self, split: DatasetSplit):
@@ -51,10 +58,10 @@ class MTLDataset(PreparedDataset):
     """Combines multiple datasets into a single Multi-Task dataset.
     """
 
-    def __init__(self, datasets, name='MTL'):
+    def __init__(self, datasets: Dict[str, PreparedDataset], name='MTL'):
         """
         :param name: name of this dataset.
-        :param datasets: named datasets as keyword arguments.
+        :param datasets: mapping from dataset names to datasets.
         """
         super().__init__(name, None, None)
         self.datasets = list(datasets.values())
