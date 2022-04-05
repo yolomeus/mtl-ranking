@@ -10,7 +10,7 @@ from typing import Tuple, Dict
 import h5py
 import torch
 from hydra.utils import to_absolute_path
-from torch import ModuleDict, Module
+from torch.nn import ModuleDict, Module
 from torch.utils.data import Dataset
 from transformers import BertTokenizer
 
