@@ -4,13 +4,14 @@ defaults:
   - loop: multitask_loop
 
 gpus: 1
-num_workers: 0
+num_workers: 8
 random_seed: 1590258941
 
 training:
   epochs: 100
   batch_size: 32
-  accumulate_batches: 1
+  accumulate_batches: 0
+  precision: 16
   # checkpointing
   save_ckpts: 10
   monitor: val/loss
