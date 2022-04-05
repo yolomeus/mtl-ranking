@@ -57,8 +57,8 @@ class WandbMinMaxLogger(WandbLogger):
         :param min_value: current minimum of the metric.
         """
         name: str
-        max_value: int
-        min_value: int
+        max_value: float
+        min_value: float
 
         def update(self, value):
             """update the current min and max values based on a new value.
