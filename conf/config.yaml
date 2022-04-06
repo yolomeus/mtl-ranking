@@ -10,7 +10,7 @@ random_seed: 1590258941
 training:
   epochs: 100
   batch_size: 32
-  accumulate_batches: 0
+  accumulate_batches: 1
   precision: 16
   # checkpointing
   save_ckpts: 10
@@ -27,8 +27,8 @@ log_gradients: False
 
 hydra:
   run:
-    dir: ./outputs/single/${model._target_}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: outputs/single/${model.body._target_}/${loop.loss._target_}/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
   sweep:
-    dir: outputs/sweep/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: outputs/sweep/${model.body._target_}/${loop.loss._target_}/${now:%Y-%m-%d}/${now:%H-%M-%S}
     # subdir: lr:${loop.optimizer.lr}
