@@ -1,4 +1,5 @@
 defaults:
+  - preprocessor@msm_bm25.preprocessor: bert
   - metrics@msm_bm25.metrics.train_metrics:
       - mse
   - metrics@msm_bm25.metrics.val_metrics:

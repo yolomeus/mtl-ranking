@@ -1,4 +1,5 @@
 defaults:
+  - preprocessor@trec2019.preprocessor: bert
   - metrics@trec2019.metrics.train_metrics:
       - accuracy
       - f1score
@@ -20,7 +21,6 @@ defaults:
       - trec_map
       - trec_ndcg@10
       - trec_ndcg@20
-
 trec2019:
   _target_: datamodule.dataset.TREC2019
 
@@ -37,7 +37,7 @@ trec2019:
     _target_: torch.nn.Softmax
     dim: -1
 
-  # override num_classes for this dataset
+  # override metric parameters for this dataset
   metrics:
     train_metrics:
       f1score:

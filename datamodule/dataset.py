@@ -12,9 +12,9 @@ import torch
 from hydra.utils import to_absolute_path
 from torch.nn import ModuleDict, Module
 from torch.utils.data import Dataset
-from transformers import BertTokenizer
 
 from datamodule import DatasetSplit
+from datamodule.preprocessor import Preprocessor
 
 
 class PreparedDataset(Dataset, ABC):
@@ -22,7 +22,7 @@ class PreparedDataset(Dataset, ABC):
     dataset split.
     """
 
-    def __init__(self, name: str, metrics: Dict[str, ModuleDict], to_probabilities: Module):
+    def __init__(self, name: str, metrics: Dict[str, ModuleDict], to_probabilities: Module, preprocessor: Preprocessor):
         """
 
         :param name: name of the dataset.
@@ -35,6 +35,7 @@ class PreparedDataset(Dataset, ABC):
             self.metrics = {split_name: [m for m in split] for split_name, split in metrics.items()}
             self.to_probabilities = str(to_probabilities)
         self.name = name
+        self.preprocessor = preprocessor
 
     @abstractmethod
     def prepare_data(self):
@@ -63,7 +64,7 @@ class MTLDataset(PreparedDataset):
         :param name: name of this dataset.
         :param datasets: mapping from dataset names to datasets.
         """
-        super().__init__(name, None, None)
+        super().__init__(name, None, None, None)
         self.datasets = list(datasets.values())
         self.name_to_idx = {x: i for i, x in enumerate(list(datasets.keys()))}
         self.num_datasets = len(datasets)
@@ -106,8 +107,8 @@ class MTLDataset(PreparedDataset):
 class TREC2019(PreparedDataset):
 
     def __init__(self, name, data_file, train_file, val_file, test_file, qrels_file_test, qrels_file_val, metrics,
-                 to_probabilities):
-        super().__init__(name, metrics, to_probabilities)
+                 to_probabilities, preprocessor: Preprocessor):
+        super().__init__(name, metrics, to_probabilities, preprocessor)
 
         self.name = name
 
@@ -125,8 +126,6 @@ class TREC2019(PreparedDataset):
 
         self.current_file = None
         self.split = None
-
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     def __getitem__(self, index):
         with h5py.File(self.current_file, 'r') as fp:
@@ -207,8 +206,7 @@ class TREC2019(PreparedDataset):
         return qrels
 
     def collate(self, batch):
-        queries, docs = zip(*[x['x'] for x in batch])
-        tokenized = self.tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
+        tokenized = self.preprocessor(batch)
 
         labels = torch.stack([x['y'] for x in batch])
         q_ids = torch.stack([x['q_id'] for x in batch])
@@ -225,8 +223,8 @@ class TREC2019(PreparedDataset):
 class JSONDataset(PreparedDataset):
     def __init__(self, raw_file, train_file, val_file, test_file, num_train_samples, num_test_samples,
                  normalize_targets, name, metrics,
-                 to_probabilities):
-        super().__init__(name, metrics, to_probabilities)
+                 to_probabilities, preprocessor: Preprocessor):
+        super().__init__(name, metrics, to_probabilities, preprocessor)
 
         self._normalize_targets = normalize_targets
         self.num_train_samples = num_train_samples
@@ -239,8 +237,6 @@ class JSONDataset(PreparedDataset):
         self.test_file = to_absolute_path(test_file)
 
         self.data = None
-
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     def __getitem__(self, index):
         x = self.data[index]
@@ -309,9 +305,7 @@ class JSONDataset(PreparedDataset):
             return json.load(fp)
 
     def collate(self, batch):
-        queries, docs = zip(*[x['x'] for x in batch])
-        tokenized = self.tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
-
+        tokenized = self.preprocessor(batch)
         labels = torch.stack([x['y'] for x in batch]).unsqueeze(-1)
 
         return {'x': tokenized, 'y': labels}
