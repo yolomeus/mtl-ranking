@@ -105,7 +105,8 @@ class MTLDataset(PreparedDataset):
 
 class TREC2019(PreparedDataset):
 
-    def __init__(self, name, data_file, train_file, val_file, test_file, qrels_file, metrics, to_probabilities):
+    def __init__(self, name, data_file, train_file, val_file, test_file, qrels_file_test, qrels_file_val, metrics,
+                 to_probabilities):
         super().__init__(name, metrics, to_probabilities)
 
         self.name = name
@@ -116,37 +117,39 @@ class TREC2019(PreparedDataset):
         self._val_file = to_absolute_path(val_file)
         self._test_file = to_absolute_path(test_file)
 
-        self._qrels_file = to_absolute_path(qrels_file)
+        self._qrels_file_test = to_absolute_path(qrels_file_test)
+        self._qrels_file_val = to_absolute_path(qrels_file_val)
 
-        self.qid_to_pid_to_label = self._read_trec_qrels(self._qrels_file)
+        self.qrels_test = self._read_trec_qrels(self._qrels_file_test, DatasetSplit.TEST)
+        self.qrels_val = self._read_trec_qrels(self._qrels_file_val, DatasetSplit.VALIDATION)
+
         self.current_file = None
-
         self.split = None
 
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     def __getitem__(self, index):
-        with h5py.File(self.current_file, "r") as fp:
-            q_id = fp["q_ids"][index]
-            doc_id = fp["doc_ids"][index]
+        with h5py.File(self.current_file, 'r') as fp:
+            q_id = fp['q_ids'][index]
+            doc_id = fp['doc_ids'][index]
 
             og_q_id = torch.tensor(self.get_original_query_id(q_id))
             og_doc_id = torch.tensor(self.get_original_document_id(doc_id))
 
             label_rank = None
             if self.split == DatasetSplit.TEST:
-                # for the test set we use the qrels file
-                label = self.qid_to_pid_to_label[int(og_q_id)].get(int(og_doc_id), 0)
-                label_rank = torch.tensor(label)
-                label_bin = int(label >= 1)
-                label = torch.tensor([label_bin])
-
+                label_rank = self.get_qrel(og_q_id, og_doc_id, self.qrels_test)
+            elif self.split == DatasetSplit.VALIDATION:
+                label_rank = self.get_qrel(og_q_id, og_doc_id, self.qrels_val)
             else:
-                label = torch.tensor(fp["labels"][index]).unsqueeze(0).long()
+                label = torch.tensor([fp['labels'][index]], dtype=torch.long)
 
-        with h5py.File(self._data_file, "r") as fp:
-            query = fp["queries"].asstr()[q_id]
-            doc = fp["docs"].asstr()[doc_id]
+        if label_rank is not None:
+            label = torch.tensor(int(label_rank > 0))
+
+        with h5py.File(self._data_file, 'r') as fp:
+            query = fp['queries'].asstr()[q_id]
+            doc = fp['docs'].asstr()[doc_id]
 
         x = {'q_id': og_q_id, 'doc_id': og_doc_id, 'x': (query, doc), 'y': label.squeeze()}
         if label_rank is not None:
@@ -156,7 +159,7 @@ class TREC2019(PreparedDataset):
 
     def __len__(self):
         with h5py.File(self.current_file, "r") as fp:
-            return len(fp["q_ids"])
+            return len(fp['q_ids'])
 
     def prepare_data(self):
         pass
@@ -176,18 +179,28 @@ class TREC2019(PreparedDataset):
         return self
 
     def get_original_query_id(self, q_id: int):
-        with h5py.File(self._data_file, "r") as fp:
-            return int(fp["orig_q_ids"].asstr()[q_id])
+        with h5py.File(self._data_file, 'r') as fp:
+            return int(fp['orig_q_ids'].asstr()[q_id])
 
     def get_original_document_id(self, doc_id: int):
-        with h5py.File(self._data_file, "r") as fp:
-            return int(fp["orig_doc_ids"].asstr()[doc_id])
+        with h5py.File(self._data_file, 'r') as fp:
+            return int(fp['orig_doc_ids'].asstr()[doc_id])
+
+    def get_qrel(self, og_q_id, og_doc_id, qrels):
+        label = qrels[int(og_q_id)].get(int(og_doc_id), 0)
+        return torch.tensor(label)
 
     @staticmethod
-    def _read_trec_qrels(qrels_file):
+    def _read_trec_qrels(qrels_file, split: DatasetSplit):
+        # qrels for val is .tsv while test is .txt
+        if split == DatasetSplit.TEST:
+            delimiter = ' '
+        else:
+            delimiter = '\t'
+
         qrels = defaultdict(dict)
-        with open(qrels_file, 'r') as fp:
-            for q_id, _, p_id, label in csv.reader(fp, delimiter=' '):
+        with open(qrels_file, 'r', encoding='utf8') as fp:
+            for q_id, _, p_id, label in csv.reader(fp, delimiter=delimiter):
                 q_id, p_id, label = map(int, [q_id, p_id, label])
                 qrels[q_id][p_id] = int(label)
 

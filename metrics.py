@@ -108,9 +108,14 @@ class TrecMetric(CustomRetrievalMixin):
         self.qrels = defaultdict(dict)
 
         with open(to_absolute_path(qrels_file), 'r') as fp:
-            for q_id, _, p_id, label in csv.reader(fp, delimiter=' '):
-                q_id, p_id, label = map(int, [q_id, p_id, label])
-                self.qrels[q_id][p_id] = int(label)
+            try:
+                for q_id, _, p_id, label in csv.reader(fp, delimiter=' '):
+                    q_id, p_id, label = map(int, [q_id, p_id, label])
+                    self.qrels[q_id][p_id] = int(label)
+            except ValueError:
+                for q_id, _, p_id, label in csv.reader(fp, delimiter='\t'):
+                    q_id, p_id, label = map(int, [q_id, p_id, label])
+                    self.qrels[q_id][p_id] = int(label)
 
     def compute(self) -> Tensor:
         indexes = self.indexes
