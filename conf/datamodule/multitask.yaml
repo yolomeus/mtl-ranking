@@ -1,8 +1,8 @@
 defaults:
   - dataset: mtl
-  - sampler@train_sampler_cfg: random_proportional
-  - sampler@val_sampler_cfg: sequential
-  - sampler@test_sampler_cfg: sequential
+  - sampler@train_sampler: random_proportional
+  - sampler@val_sampler: sequential
+  - sampler@test_sampler: sequential
 
 _target_: datamodule.multitask_datamodule.MTLDataModule
 

@@ -52,6 +52,8 @@ def train(cfg: DictConfig):
                       accumulate_grad_batches=train_cfg.accumulate_batches,
                       precision=train_cfg.precision)
 
+    # do not instantiate datamodule recursively,
+    # we need to pass the dataset object to the sampler constructors
     datamodule = instantiate(cfg.datamodule,
                              _recursive_=False)
 

@@ -7,18 +7,19 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
 from datamodule import DatasetSplit
+from datamodule.dataset import PreparedDataset
 
 
 class MTLDataModule(LightningDataModule):
     def __init__(self,
-                 dataset: DictConfig,
+                 dataset: PreparedDataset,
                  train_batch_size: int,
                  test_batch_size: int,
                  num_workers: int,
                  pin_memory: bool,
-                 train_sampler_cfg: DictConfig,
-                 val_sampler_cfg: DictConfig,
-                 test_sampler_cfg: DictConfig):
+                 train_sampler: DictConfig,
+                 val_sampler: DictConfig,
+                 test_sampler: DictConfig):
         super().__init__()
 
         self._train_batch_size = train_batch_size
@@ -33,9 +34,9 @@ class MTLDataModule(LightningDataModule):
         self._val_ds = None
         self._test_ds = None
 
-        self._train_sampler_cfg = train_sampler_cfg
-        self._val_sampler_cfg = val_sampler_cfg
-        self._test_sampler_cfg = test_sampler_cfg
+        self._train_sampler_cfg = train_sampler
+        self._val_sampler_cfg = val_sampler
+        self._test_sampler_cfg = test_sampler
 
         self._train_sampler = None
         self._val_sampler = None

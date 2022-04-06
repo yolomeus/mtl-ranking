@@ -111,12 +111,18 @@ We need to provide each {train, val, test}_sampler_cfg to the datamodule:
 defaults:
   - dataset: mtl
   # select random_proportional from ./sampler and set as
-  # datamodule.train_sampler_cfg
+  # datamodule.train_sampler
   - sampler@train_sampler_cfg: random_proportional
   - sampler@val_sampler_cfg: sequential
   - sampler@test_sampler_cfg: sequential
 
 ...
+```
+
+We can replace a sampler through the commandline like so:
+
+```shell
+python train.py datamodule/sampler@datamodule.train_sampler=sequential
 ```
 
 
