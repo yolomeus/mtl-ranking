@@ -151,6 +151,7 @@ class TREC2019(PreparedDataset):
         x = {'q_id': og_q_id, 'doc_id': og_doc_id, 'x': (query, doc), 'y': label.squeeze()}
         if label_rank is not None:
             x['y_rank'] = label_rank
+
         return x
 
     def __len__(self):
@@ -198,8 +199,9 @@ class TREC2019(PreparedDataset):
 
         labels = torch.stack([x['y'] for x in batch])
         q_ids = torch.stack([x['q_id'] for x in batch])
+        doc_ids = torch.stack([x['doc_id'] for x in batch])
 
-        x = {'x': tokenized, 'y': labels, 'meta': {'indexes': q_ids}}
+        x = {'x': tokenized, 'y': labels, 'meta': {'q_ids': q_ids, 'doc_ids': doc_ids}}
 
         if batch[0].get('y_rank', None) is not None:
             y_rank = torch.stack([x['y_rank'] for x in batch])
@@ -255,6 +257,14 @@ class JSONDataset(PreparedDataset):
                 json.dump(val_ds, val_fp)
                 json.dump(test_ds, test_fp)
 
+    def _split_ds(self, dataset):
+        shuffle(dataset, Random(5823905).random)
+        train_ds, val_ds = dataset[self.num_test_samples:], dataset[:self.num_test_samples]
+        train_ds = train_ds[:self.num_train_samples]
+        val_ds, test_ds = val_ds[len(val_ds) // 2:], val_ds[:len(val_ds) // 2]
+
+        return train_ds, val_ds, test_ds
+
     @staticmethod
     def normalize_targets(train_ds, val_ds, test_ds):
         train_max = max([x['target'] for x in train_ds])
@@ -280,14 +290,6 @@ class JSONDataset(PreparedDataset):
             raise NotImplementedError
 
         return self
-
-    def _split_ds(self, dataset):
-        shuffle(dataset, Random(5823905).random)
-        train_ds, val_ds = dataset[self.num_test_samples:], dataset[:self.num_test_samples]
-        train_ds = train_ds[:self.num_train_samples]
-        val_ds, test_ds = val_ds[len(val_ds) // 2:], val_ds[:len(val_ds) // 2]
-
-        return train_ds, val_ds, test_ds
 
     @staticmethod
     def _load_ds(ds_path):
