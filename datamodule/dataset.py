@@ -199,9 +199,8 @@ class TREC2019(PreparedDataset):
 
         labels = torch.stack([x['y'] for x in batch])
         q_ids = torch.stack([x['q_id'] for x in batch])
-        doc_ids = torch.stack([x['doc_id'] for x in batch])
 
-        x = {'x': tokenized, 'y': labels, 'meta': {'q_ids': q_ids, 'doc_ids': doc_ids}}
+        x = {'x': tokenized, 'y': labels, 'meta': {'indexes': q_ids}}
 
         if batch[0].get('y_rank', None) is not None:
             y_rank = torch.stack([x['y_rank'] for x in batch])
