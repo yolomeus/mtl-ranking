@@ -10,7 +10,7 @@ dependencies:
   - cudatoolkit=11.3
   - pytorch-lightning=1.6.0
   - transformers=4.16.2
-  - h5py
+  - h5py=3.3.0
   - pip:
       - hydra-core==1.1.0
       - wandb==0.12.11
