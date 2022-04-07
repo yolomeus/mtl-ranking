@@ -1,10 +1,12 @@
 import os
 
 import hydra
+import wandb
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.loggers import WandbLogger
 
 
 @hydra.main(config_path='conf', config_name='config')
@@ -61,6 +63,9 @@ def train(cfg: DictConfig):
 
     # only look at this in the very end ;)
     trainer.test(ckpt_path='best', datamodule=datamodule)
+
+    if issubclass(logger.__class__, WandbLogger):
+        wandb.finish()
 
 
 if __name__ == '__main__':
