@@ -15,14 +15,15 @@ training:
   precision: 32
   # checkpointing
   save_ckpts: 10
-  monitor: val/loss
-  mode: min
+  monitor: val/trec_map/trec2019
+  mode: max
   patience: 5
 
 testing:
   batch_size: ${training.batch_size}
 
 logger:
+  project: debug
   _target_: logger.loggers.WandbMinMaxLogger
 log_gradients: False
 

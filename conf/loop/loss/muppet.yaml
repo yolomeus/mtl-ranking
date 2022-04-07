@@ -1,0 +1,4 @@
+defaults:
+  - base_multitask_loss
+
+_target_: loss.MuppetLoss
