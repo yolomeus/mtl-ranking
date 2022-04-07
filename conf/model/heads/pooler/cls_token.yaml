@@ -1,0 +1,4 @@
+_target_: model.head.pooler.CLSToken
+in_dim: ${model.body.out_dim}
+out_dim: ${.in_dim}
+layers: ???
