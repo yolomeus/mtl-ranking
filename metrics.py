@@ -190,23 +190,23 @@ class TrecNDCG(TrecMetric):
 
     def _metric(self, preds: Tensor, target: Tensor, q_id=None) -> Tensor:
         ordering = torch.argsort(preds, descending=True)
-        ranked_targets = target[ordering].cpu().numpy()
+        ranked_targets = target[ordering]
 
         return self._ndcg(ranked_targets, q_id)
 
     def _ndcg(self, ranked_targets, q_id):
-        return self._dcg(ranked_targets) / self._dcg(self._ideal_targets(q_id))
+        return self._dcg(ranked_targets) / self._dcg(self._ideal_targets(q_id, device=ranked_targets.device))
 
-    def _ideal_targets(self, q_id):
+    def _ideal_targets(self, q_id, device):
         ideal_targets = list(self.qrels[q_id].values())
-        return torch.as_tensor(sorted(ideal_targets, reverse=True))
+        return torch.as_tensor(sorted(ideal_targets, reverse=True), device=device)
 
     def _dcg(self, targets):
         gain = targets[:self.k]
-        discount = self._discount(min(self.k, len(gain)))
+        discount = self._discount(min(self.k, len(gain)), device=targets.device)
         return (gain / discount).sum()
 
     @staticmethod
-    def _discount(n):
-        x = torch.arange(1, n + 1, 1)
+    def _discount(n, device):
+        x = torch.arange(1, n + 1, 1, device=device)
         return torch.log2(x + 1)
