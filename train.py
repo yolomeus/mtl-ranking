@@ -5,7 +5,7 @@ import wandb
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 
 
@@ -50,7 +50,7 @@ def train(cfg: DictConfig):
     trainer = Trainer(max_epochs=train_cfg.epochs,
                       gpus=cfg.gpus,
                       logger=logger,
-                      callbacks=[model_checkpoint, early_stopping],
+                      callbacks=[model_checkpoint, early_stopping, LearningRateMonitor()],
                       accumulate_grad_batches=train_cfg.accumulate_batches,
                       precision=train_cfg.precision)
 

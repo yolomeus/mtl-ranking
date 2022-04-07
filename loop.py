@@ -11,6 +11,7 @@ from pytorch_lightning import LightningModule
 from torch import Tensor
 from torch.nn import Module
 from torch.optim import Optimizer
+from transformers import get_constant_schedule_with_warmup
 
 from datamodule import DatasetSplit
 from logger.utils import MultiTaskMetrics
@@ -46,7 +47,8 @@ class MultiTaskLoop(AbstractBaseLoop):
         self.metrics = MultiTaskMetrics(dataset_cfgs)
 
     def configure_optimizers(self):
-        return self.optimizer
+        lr_scheduler = get_constant_schedule_with_warmup(self.optimizer, self.hparams.training.warmup_steps)
+        return {'optimizer': self.optimizer, 'lr_scheduler': {'scheduler': lr_scheduler, 'interval': 'step'}}
 
     def training_step(self, batch, batch_idx):
         inputs, y_true, meta = batch
