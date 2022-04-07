@@ -11,6 +11,7 @@ dependencies:
   - pytorch-lightning=1.6.0
   - transformers=4.16.2
   - h5py=3.3.0
+  - hdf5=1.10.6
   - pip:
       - hydra-core==1.1.0
       - wandb==0.12.11
