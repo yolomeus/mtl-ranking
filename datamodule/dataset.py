@@ -22,7 +22,8 @@ class PreparedDataset(Dataset, ABC):
     dataset split.
     """
 
-    def __init__(self, name: str, metrics: Dict[str, ModuleDict], to_probabilities: Module, preprocessor: Preprocessor):
+    def __init__(self, name: str, metrics: Dict[str, ModuleDict] = None, to_probabilities: Module = None,
+                 loss: Module = None, preprocessor: Preprocessor = None):
         """
 
         :param name: name of the dataset.
@@ -33,7 +34,11 @@ class PreparedDataset(Dataset, ABC):
         if metrics is not None:
             # only keep names of metrics
             self.metrics = {split_name: [m for m in split] for split_name, split in metrics.items()}
+        if to_probabilities is not None:
             self.to_probabilities = str(to_probabilities)
+
+        self.loss = loss
+
         self.name = name
         self.preprocessor = preprocessor
 
@@ -64,7 +69,8 @@ class MTLDataset(PreparedDataset):
         :param name: name of this dataset.
         :param datasets: mapping from dataset names to datasets.
         """
-        super().__init__(name, None, None, None)
+
+        super().__init__(name)
         self.datasets = list(datasets.values())
         self.name_to_idx = {x: i for i, x in enumerate(list(datasets.keys()))}
         self.num_datasets = len(datasets)
@@ -107,9 +113,9 @@ class MTLDataset(PreparedDataset):
 class TREC2019(PreparedDataset):
 
     def __init__(self, name, data_file, train_file, val_file, test_file, qrels_file_test, qrels_file_val, metrics,
-                 to_probabilities, preprocessor: Preprocessor):
-        super().__init__(name, metrics, to_probabilities, preprocessor)
+                 to_probabilities, loss: Module, preprocessor: Preprocessor):
 
+        super().__init__(name, metrics, to_probabilities, loss, preprocessor)
         self.name = name
 
         self._data_file = to_absolute_path(data_file)
@@ -222,9 +228,8 @@ class TREC2019(PreparedDataset):
 
 class JSONDataset(PreparedDataset):
     def __init__(self, raw_file, train_file, val_file, test_file, num_train_samples, num_test_samples,
-                 normalize_targets, name, metrics,
-                 to_probabilities, preprocessor: Preprocessor):
-        super().__init__(name, metrics, to_probabilities, preprocessor)
+                 normalize_targets, name, metrics, to_probabilities, loss: Module, preprocessor: Preprocessor):
+        super().__init__(name, metrics, to_probabilities, loss, preprocessor)
 
         self._normalize_targets = normalize_targets
         self.num_train_samples = num_train_samples

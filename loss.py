@@ -1,6 +1,7 @@
 from abc import abstractmethod, ABC
-from typing import List, Dict
+from typing import Dict
 
+from omegaconf import DictConfig
 from torch import Tensor
 from torch.nn import Module, ModuleDict
 
@@ -10,15 +11,10 @@ class MultiTaskLoss(Module, ABC):
 
     """
 
-    def __init__(self, dataset_names: List[str], dataset_losses: List[Module]):
-        """
-
-        :param dataset_names: name (str key) of each dataset to compute loss over.
-        :param dataset_losses: the loss module for each individual dataset.
-        """
+    def __init__(self, datasets: DictConfig):
         super().__init__()
-        self.dataset_names = dataset_names
-        self.dataset_losses = dataset_losses
+        name_to_loss = {name: ds.loss for name, ds in datasets.items()}
+        self.losses = ModuleDict(name_to_loss)
 
     @abstractmethod
     def forward(self, y_pred: Dict[str, Tensor], y_true: Dict[str, Tensor]):
@@ -33,12 +29,6 @@ class MultiTaskLoss(Module, ABC):
 class SumLoss(MultiTaskLoss):
     """Take individual losses for each dataset and simply sum over them.
     """
-
-    def __init__(self, dataset_names, dataset_losses):
-        super().__init__(dataset_names, dataset_losses)
-
-        self.losses = ModuleDict({name: loss
-                                  for name, loss in zip(self.dataset_names, self.dataset_losses)})
 
     def forward(self, y_pred: Dict[str, Tensor], y_true: Dict[str, Tensor]):
         total_loss = 0

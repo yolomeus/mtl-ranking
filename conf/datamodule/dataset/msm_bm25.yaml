@@ -25,3 +25,6 @@ msm_bm25:
 
   to_probabilities:
     _target_: torch.nn.Identity
+
+  loss:
+    _target_: torch.nn.MSELoss
