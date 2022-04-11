@@ -165,14 +165,15 @@ class TrecMAP(TrecMetric):
         ordering = torch.argsort(preds, descending=True)
         targets_sorted = target[ordering]
 
-        rel_so_far = 0
-        total = 0
+        rel_so_far = torch.zeros((1,))
+        total = torch.zeros((1,))
         for i in range(len(ordering)):
             if targets_sorted[i] > 0:
                 rel_so_far += 1
                 total += rel_so_far / (i + 1)
 
-        return torch.tensor(total / self.q_id_to_num_rels[q_id])
+        x = total / self.q_id_to_num_rels[q_id]
+        return x
 
 
 class TrecNDCG(TrecMetric):
