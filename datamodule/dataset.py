@@ -245,7 +245,7 @@ class JSONDataset(PreparedDataset):
 
     def __getitem__(self, index):
         x = self.data[index]
-        query, doc, label = x['input']['query'], x['input']['passage'], x['target']
+        query, doc, label = x['input']['query'], x['input']['passage'], x['target'][0]['label']
         return {'x': (query, doc), 'y': torch.tensor(label)}
 
     def __len__(self):
@@ -280,15 +280,15 @@ class JSONDataset(PreparedDataset):
 
     @staticmethod
     def normalize_targets(train_ds, val_ds, test_ds):
-        train_max = max([x['target'] for x in train_ds])
-        train_min = min([x['target'] for x in train_ds])
+        train_max = max([x['targets'][0]['label'] for x in train_ds])
+        train_min = min([x['targets'][0]['label'] for x in train_ds])
         for x in train_ds:
-            x['target'] = (x['target'] - train_min) / (train_max - train_min)
+            x['targets'][0]['label'] = (x['targets'][0]['label'] - train_min) / (train_max - train_min)
 
         for ds in [val_ds, test_ds]:
             for x in ds:
-                x['target'] = max(train_min, min(x['target'], train_max))
-                x['target'] = (x['target'] - train_min) / (train_max - train_min)
+                x['targets'][0]['label'] = max(train_min, min(x['targets'][0]['label'], train_max))
+                x['targets'][0]['label'] = (x['targets'][0]['label'] - train_min) / (train_max - train_min)
 
         return train_ds, val_ds, test_ds
 
