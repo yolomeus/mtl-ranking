@@ -2,7 +2,6 @@
 encapsulate the model instead of being bound to it by inheritance. This way, the same model can be trained with
 multiple different procedures, without having to duplicate model code by subclassing.
 """
-from abc import ABC
 from typing import Dict
 
 import torch
@@ -18,26 +17,14 @@ from logger.utils import MultiTaskMetrics
 from model.multitask import MultiTaskModel
 
 
-class AbstractBaseLoop(LightningModule, ABC):
-    """Abstract base class for implementing a training loop for a pytorch model.
-    """
-
-    def __init__(self, hparams: DictConfig):
-        """
-        :param hparams: contains all hyperparameters to be logged before training.
-        """
-        super().__init__()
-        self.save_hyperparameters(hparams)
-
-
-# noinspection PyAbstractClass
-class MultiTaskLoop(AbstractBaseLoop):
+class MultiTaskLoop(LightningModule):
     """Default wrapper for training/testing a pytorch module using pytorch-lightning. Assumes a standard classification
     task with instance-label pairs (x, y) and a loss function that has the signature loss(y_pred, y_true).
     """
 
     def __init__(self, hparams: DictConfig, model: MultiTaskModel, optimizer: Optimizer, loss: Module):
-        super().__init__(hparams)
+        super().__init__()
+        self.save_hyperparameters(hparams, ignore=['model', 'loop'])
 
         self.model = model
         self.loss = loss
