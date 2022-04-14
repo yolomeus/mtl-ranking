@@ -34,7 +34,27 @@ python train.py training.batch_size=32 loop.optimizer.lr=1e-4
 
 For structuring this project we use a composable hydra configuration (found in `conf/`) which mirrors the structure and
 composition of the python modules we use. This enables us to hot-swap parts of our training-pipeline and set up
-different experiments without directly editing the code.  
+different experiments without directly editing the code.
+
+```
+conf
+│
+├───config.yaml # the root config file
+│
+├───datamodule
+│   ├───dataset
+│   │   ├───metrics
+│   │   └───preprocessor
+│   └───sampler
+├───loop
+│   ├───loss
+│   └───optimizer
+└───model
+    ├───body
+    └───heads
+        └───pooler
+```
+
 For example, if we want to add a new dataset, all we need to do is add a `my_dataset.yaml` config file
 to `conf/datamodule/dataset/` with a `_target_` field that points to our dataset python class, e.g.
 `_target_: datamodule.dataset.MyDataset` and select it when running the train script:
@@ -61,6 +81,12 @@ defaults:
 _target_: model.multitask.MultiTaskModel
 ```
 
+```python
+class MultiTaskModel(Module):
+    def __init__(self, body: Module, heads: Dict[str, Module]):
+        ...
+```
+
 A head module should implement `model.head.MTLHead` and a body `model.body.MTLBody`.
 
 ### Loop
@@ -68,11 +94,28 @@ A head module should implement `model.head.MTLHead` and a body `model.body.MTLBo
 A pytorch-lightning module that defines train, validation and test steps. It also holds the optimizer, loss and metric
 modules as well as the model.
 
+```python
+class MultiTaskLoop(LightningModule):
+    def __init__(self, hparams: DictConfig, model: MultiTaskModel, optimizer: Optimizer, loss: Module):
+        ...
+```
+
 ### Datamodule
 
 The datamodule provides dataloaders and defines how to pre-process and assemble each dataset. For this project we use an
 MTL specific datamodule that holds a reference to a dataset and dataloader samplers for {train, validation, test}_split.
 We most likely do not need to replace the full datamodule for MTL experiments.
+
+```yaml
+defaults:
+  - dataset: mtl
+  - sampler@train_sampler: random_proportional
+  - sampler@val_sampler: sequential
+  - sampler@test_sampler: sequential
+
+_target_: datamodule.multitask_datamodule.MTLDataModule
+...
+```
 
 #### Dataset
 
@@ -92,7 +135,13 @@ defaults:
 _target_: datamodule.dataset.MTLDataset
 ```
 
-To work with MTLDataset, the dataset should subclass `datamodule.dataset.PreparedDataset`.
+```python
+class MTLDataset(PreparedDataset):
+    def __init__(self, datasets: Dict[str, PreparedDataset]):
+        ...
+```
+
+To work with MTLDataset, a dataset should subclass `datamodule.dataset.PreparedDataset`.
 
 We can override parameters passed to the dataset like so:
 
@@ -102,8 +151,10 @@ python train.py datamodule.dataset.datasets.msm_bm25.name="msm_bm25_new"
 
 #### Sampler
 
-The sampler defines how to sample from each dataset by returning indexes. For the MTL dataset, instead of a single
-integer index it has to return a tuple `(dataset_idx, sample_idx)`.   
+The sampler defines how to sample from each dataset by returning indexes and has to subclass `
+torch.utils.data.Sampler`. For the MTL dataset, instead of a single
+integer index it has to return a tuple `(dataset_idx, sample_idx)`. This way, it specifies not only a sample's
+position in a dataset, but also from which dataset to sample from.
 We need to provide each {train, val, test}_sampler_cfg to the datamodule:
 
 ```yaml
