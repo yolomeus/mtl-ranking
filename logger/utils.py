@@ -22,7 +22,7 @@ class MultiTaskMetrics(Module):
         total_batch_size = sum([len(x) for x in y_true.values()])
 
         for dataset_name in y_pred.keys():
-            y_prob = self.to_probabilites[dataset_name](y_pred[dataset_name])
+            y_prob = self.to_probabilites[dataset_name](y_pred[dataset_name]).detach()
 
             metrics = self._select_metrics(dataset_name, split)
             for name, metric in metrics.items():
@@ -35,8 +35,8 @@ class MultiTaskMetrics(Module):
                          on_epoch=True,
                          batch_size=len(y_true[dataset_name]))
 
-        loss = loop.loss(y_pred, y_true)
-        loop.log(f'{split.value}/loss', loss.item(), on_step=False, on_epoch=True, batch_size=total_batch_size)
+        loss = loop.loss(y_pred.detach(), y_true)
+        loop.log(f'{split.value}/loss', loss.detach(), on_step=True, on_epoch=True, batch_size=total_batch_size)
 
     def _select_metrics(self, dataset_name, split):
         if split == DatasetSplit.TRAIN:

@@ -14,7 +14,7 @@ class WandbMinMaxLogger(WandbLogger):
         super().__init__(*args, **kwargs)
 
         self._postfix = postfix
-        self._bounds_dict = {}
+        self.bounds_dict = {}
 
     @rank_zero_only
     def log_metrics(self, metrics, step):
@@ -26,8 +26,9 @@ class WandbMinMaxLogger(WandbLogger):
         metrics = {k + self._postfix if k != 'epoch' else k: v
                    for k, v in metrics.items()}
         super().log_metrics(metrics, step)
-        for metric, value in metrics.items():
-            self._update_bounds(metric, value)
+        for metric_name, value in metrics.items():
+            if metric_name != 'epoch':
+                self._update_bounds(metric_name, value)
         self._log_bounds()
 
     def _update_bounds(self, name, value):
@@ -36,17 +37,15 @@ class WandbMinMaxLogger(WandbLogger):
         :param name: name/identifier of the metric.
         :param value: newly recorded value.
         """
-        bounds = self._bounds_dict.get(name, self.__MetricBounds(name, value, value))
+        bounds = self.bounds_dict.get(name, self.__MetricBounds(name, value, value))
         bounds.update(value)
-        self._bounds_dict[name] = bounds
+        self.bounds_dict[name] = bounds
 
     def _log_bounds(self):
         """Log the current min and max bounds for each metric in the wandb summary.
         """
-        summary = self.experiment.summary
-        for bounds in self._bounds_dict.values():
-            summary[bounds.min_name] = bounds.min_value
-            summary[bounds.max_name] = bounds.max_value
+        for bounds in self.bounds_dict.values():
+            super().log_metrics({bounds.min_name: bounds.min_value, bounds.max_name: bounds.max_value})
 
     @dataclass
     class __MetricBounds:
