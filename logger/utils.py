@@ -35,7 +35,7 @@ class MultiTaskMetrics(Module):
                          on_epoch=True,
                          batch_size=len(y_true[dataset_name]))
 
-        loss = loop.loss(y_pred.detach(), y_true)
+        loss = loop.loss(y_pred, y_true)
         loop.log(f'{split.value}/loss', loss.detach(), on_step=True, on_epoch=True, batch_size=total_batch_size)
 
     def _select_metrics(self, dataset_name, split):
