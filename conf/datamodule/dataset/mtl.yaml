@@ -1,5 +1,6 @@
 defaults:
   - ../dataset@datasets:
+      # - msm_ner
       - msm_bm25
       - trec2019
 

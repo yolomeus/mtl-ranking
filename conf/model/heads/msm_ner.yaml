@@ -1,0 +1,11 @@
+defaults:
+  - pooler: average
+
+_target_: model.head.mlp.MLP
+h_dim: 128
+out_dim: ${datamodule.dataset.datasets.msm_ner.num_classes}
+dropout: 0.2
+sigmoid_out: false
+
+pooler:
+  layers: [ 5 ]
