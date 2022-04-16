@@ -15,14 +15,13 @@ class MultiTaskModel(Module):
         self.body = body
         self.heads = ModuleDict(heads)
 
-    def forward(self, name_to_batch: dict):
+    def forward(self, name_to_batch: dict, meta: dict):
         """
-        :param name_to_batch: a mapping from input module name to the batch of inputs to be passed to the corresponding
-        model input.
-
+        :param name_to_batch: a mapping from head name to corresponding batch.
+        :param meta: a mapping from head name to any additional data that needs to be passed to.
         :return: a dict mapping from output module names to corresponding predictions.
         """
-        preds = {name: self.heads[name](self.body(batch))
+        preds = {name: self.heads[name](self.body(batch), meta[name])
                  for name, batch in name_to_batch.items()}
         return preds
 

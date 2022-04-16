@@ -39,7 +39,7 @@ class MultiTaskLoop(LightningModule):
 
     def training_step(self, batch, batch_idx):
         inputs, y_true, meta = batch
-        y_pred = self.model(inputs)
+        y_pred = self.model(inputs, meta)
         loss = self.loss(y_pred, y_true)
         return {'loss': loss, 'y_true': y_true, 'y_pred': self._detach(y_pred), 'meta': meta}
 
@@ -49,7 +49,7 @@ class MultiTaskLoop(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         inputs, y_true, meta = batch
-        y_pred = self.model(inputs)
+        y_pred = self.model(inputs, meta)
         return {'y_true': y_true, 'y_pred': self._detach(y_pred), 'meta': meta}
 
     def validation_step_end(self, outputs):
@@ -57,7 +57,7 @@ class MultiTaskLoop(LightningModule):
 
     def test_step(self, batch, batch_idx):
         inputs, y_true, meta = batch
-        y_pred = self.model(inputs)
+        y_pred = self.model(inputs, meta)
         return {'y_true': y_true, 'y_pred': self._detach(y_pred), 'meta': meta}
 
     def test_step_end(self, outputs):

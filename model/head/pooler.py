@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from typing import List
 
 import torch
@@ -20,6 +21,26 @@ class Pooler(Module):
         self.out_dim = out_dim
         self.layers = layers
 
+    @abstractmethod
+    def forward(self, inputs, meta=None):
+        """
+
+        :param inputs:
+        :param meta:
+        :return:
+        """
+
+    @staticmethod
+    def collect_spans(x, spans):
+        """Given a sequence of vectors and a list of integer spans, select the vectors within each span.
+
+        :param x:
+        :param spans:
+        :return: a list of vector sequences, with each sequence corresponding to a span from spans.
+        """
+        # TODO support multiple spans
+        return [x[i, a:b] for i, (a, b) in enumerate(spans)]
+
 
 class Average(Pooler):
     """Averages layer outputs over the sequence dimension. If multiple layers are passed, they're averaged over the
@@ -33,9 +54,10 @@ class Average(Pooler):
         if len(self.layers) > 1:
             self._pool_layers = True
 
-    def forward(self, inputs):
+    def forward(self, inputs, meta=None):
         """
         :param inputs: a list containing for each layer: a batch of sequences of vectors with size in_dim
+        :param meta:
         """
         layer_outputs = [inputs[i] for i in self.layers]
 
@@ -44,7 +66,11 @@ class Average(Pooler):
         else:
             x = layer_outputs[0]
 
-        return x.mean(dim=1)
+        if meta and 'spans' in meta:
+            x = self.collect_spans(x, meta['spans'])
+
+        x = torch.stack([t.mean(0) for t in x])
+        return x
 
 
 class CLSToken(Pooler):
@@ -56,7 +82,7 @@ class CLSToken(Pooler):
         super().__init__(in_dim, out_dim, layers)
         assert in_dim == out_dim or out_dim is None
 
-    def forward(self, inputs):
+    def forward(self, inputs, meta=None):
         # select CLS token for each layer
         layer_outputs = [inputs[i][:, 0] for i in self.layers]
 
@@ -70,8 +96,7 @@ class CLSToken(Pooler):
 
 
 class SelfAttention(Pooler):
-    """
-
+    """Applies a single layer of self attention, then computes weighted sum given point-wise mlp learned weights.
     """
 
     def __init__(self, in_dim: int, out_dim: int, layers: List[int]):
@@ -82,7 +107,7 @@ class SelfAttention(Pooler):
                                            Linear(in_dim, 1),
                                            Softmax(1))
 
-    def forward(self, inputs):
+    def forward(self, inputs, meta=None):
         x = inputs[self.layers]
         out, _ = self.mha(x, x, x, need_weights=False)
         a = self.attention_scorer(out)
