@@ -23,7 +23,7 @@ testing:
   batch_size: ${training.batch_size}
 
 logger:
-  project: debug
+  project: mtl-ranking
   _target_: logger.loggers.WandbMinMaxLogger
 log_gradients: False
 
