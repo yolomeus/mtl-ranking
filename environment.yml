@@ -15,4 +15,4 @@ dependencies:
   - spacy=3.2.1
   - pip:
       - hydra-core==1.1.0
-      - wandb==0.12.11
+      - wandb==0.12.14
