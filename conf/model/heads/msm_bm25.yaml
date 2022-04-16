@@ -3,9 +3,9 @@ defaults:
 
 _target_: model.head.mlp.MLP
 h_dim: 128
-out_dim: 1
+out_dim: ${datamodule.dataset.datasets.msm_bm25.num_buckets}
 dropout: 0.2
-sigmoid_out: true
+sigmoid_out: false
 
 pooler:
   layers: [ 5 ]

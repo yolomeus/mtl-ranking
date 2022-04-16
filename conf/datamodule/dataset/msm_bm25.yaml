@@ -1,11 +1,14 @@
 defaults:
   - preprocessor@msm_bm25.preprocessor: bert
   - metrics@msm_bm25.metrics.train_metrics:
-      - mse
+      - accuracy
+      - f1score
   - metrics@msm_bm25.metrics.val_metrics:
-      - mse
+      - accuracy
+      - f1score
   - metrics@msm_bm25.metrics.test_metrics:
-      - mse
+      - accuracy
+      - f1score
 
 msm_bm25:
   _target_: datamodule.dataset.RegressionJSONDataset
@@ -21,10 +24,23 @@ msm_bm25:
   num_train_samples: 40000
   num_test_samples: 20000
 
-  normalize_targets: true
+  # 1 means no buckets at all i.e. regression
+  num_buckets: 10
 
   to_probabilities:
     _target_: torch.nn.Identity
 
   loss:
-    _target_: torch.nn.MSELoss
+    _target_: torch.nn.CrossEntropyLoss
+
+  # ---------- overrides ----------
+  metrics:
+    train_metrics:
+      f1score:
+        num_classes: ${datamodule.dataset.datasets.msm_bm25.num_buckets}
+    val_metrics:
+      f1score:
+        num_classes: ${datamodule.dataset.datasets.msm_bm25.num_buckets}
+    test_metrics:
+      f1score:
+        num_classes: ${datamodule.dataset.datasets.msm_bm25.num_buckets}
