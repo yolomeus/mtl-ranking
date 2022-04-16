@@ -39,7 +39,8 @@ class Pooler(Module):
         :return: a list of vector sequences, with each sequence corresponding to a span from spans.
         """
         # TODO support multiple spans
-        return [x[i, a:b] for i, (a, b) in enumerate(spans)]
+        a, b = spans[:, 0], spans[:, 1]
+        return [x[i, a[i]:b[i]] for i in torch.arange(0, spans.shape[0])]
 
 
 class Average(Pooler):

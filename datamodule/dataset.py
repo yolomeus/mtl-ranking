@@ -466,4 +466,4 @@ class ClassificationJSONDataset(JSONDataset):
     def collate(self, batch):
         tokenized, new_spans = self.preprocessor(batch)
         labels = torch.stack([x['y'] for x in batch])
-        return {'x': tokenized, 'y': labels, 'meta': {'spans': new_spans}}
+        return {'x': tokenized, 'y': labels, 'meta': {'spans': torch.tensor(new_spans, dtype=torch.long)}}
