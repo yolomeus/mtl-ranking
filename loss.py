@@ -46,8 +46,15 @@ class MuppetLoss(MultiTaskLoss):
 
     def forward(self, y_pred: Dict[str, Tensor], y_true: Dict[str, Tensor]):
         total_loss = 0
-        for name in y_pred.keys():
-            loss = self.losses[name](y_pred[name], y_true[name]) / torch.log(tensor(y_pred[name].shape[-1]) + 1)
+        for task_name in y_pred.keys():
+            task_loss = self.losses[task_name](y_pred[task_name],
+                                               y_true[task_name])
+
+            n_classes = y_pred[task_name].shape[-1]
+            assert n_classes > 1
+            n_classes = tensor(n_classes, device=task_loss.device)
+
+            loss = task_loss / torch.log(n_classes)
             total_loss += loss
 
         return total_loss
