@@ -1,5 +1,5 @@
 defaults:
-  - pooler: average
+  - pooler: cls_token
 
 _target_: model.head.mlp.MLP
 h_dim: 128
@@ -7,4 +7,4 @@ out_dim: 2
 dropout: 0.2
 
 pooler:
-  layers: [12]
+  layers: [ 12 ]
