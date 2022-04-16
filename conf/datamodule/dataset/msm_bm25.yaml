@@ -28,7 +28,8 @@ msm_bm25:
   num_buckets: 10
 
   to_probabilities:
-    _target_: torch.nn.Identity
+    _target_: torch.nn.Softmax
+    dim: -1
 
   loss:
     _target_: torch.nn.CrossEntropyLoss
