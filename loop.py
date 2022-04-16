@@ -24,7 +24,7 @@ class MultiTaskLoop(LightningModule):
 
     def __init__(self, hparams: DictConfig, model: MultiTaskModel, optimizer: Optimizer, loss: Module):
         super().__init__()
-        self.save_hyperparameters(hparams, ignore=['model', 'loop'])
+        self.save_hyperparameters(hparams, ignore=['model', 'loop', 'loss'])
 
         self.model = model
         self.loss = loss
