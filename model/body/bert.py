@@ -3,7 +3,7 @@ from abc import abstractmethod, ABC
 import torch
 from transformers import BertModel
 
-from model.body import MTLBody
+from model.body.base import MTLBody
 
 
 class BERT(MTLBody, ABC):

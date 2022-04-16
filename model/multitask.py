@@ -2,12 +2,15 @@ from typing import Dict
 
 from torch.nn import Module, ModuleDict
 
+from model.body.base import MTLBody
+from model.head.base import MTLHead
+
 
 class MultiTaskModel(Module):
     """A model consisting of a body and multiple head modules with the latter being grouped into a `MultiModule`.
     """
 
-    def __init__(self, body: Module, heads: Dict[str, Module]):
+    def __init__(self, body: MTLBody, heads: Dict[str, MTLHead]):
         super().__init__()
         self.body = body
         self.heads = ModuleDict(heads)
