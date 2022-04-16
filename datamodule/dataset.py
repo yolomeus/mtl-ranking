@@ -1,8 +1,9 @@
 import csv
 import json
+import pickle
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from copy import deepcopy
+from copy import deepcopy, copy
 from os import path
 from random import shuffle, Random
 from typing import Tuple, Dict
@@ -22,14 +23,20 @@ class PreparedDataset(Dataset, ABC):
     dataset split.
     """
 
-    def __init__(self, name: str, metrics: Dict[str, ModuleDict] = None, to_probabilities: Module = None,
-                 loss: Module = None, preprocessor: Preprocessor = None):
+    def __init__(self,
+                 name: str,
+                 metrics: Dict[str, ModuleDict] = None,
+                 to_probabilities: Module = None,
+                 loss: Module = None,
+                 preprocessor: Preprocessor = None):
         """
 
-        :param name: name of the dataset.
-        :param metrics: mapping from split name to a ModuleDict of metric modules to be used for this dataset.
+        :param name: the name of the dataset.
+        :param metrics: mapping from split name (train, val, test) to a ModuleDict that maps from
         :param to_probabilities: the module used for converting predictions to a probability distribution to fit this
         dataset's labels.
+        :param loss: the loss module to be used for this dataset.
+        :param preprocessor: the preprocessor to be applied to the input data.
         """
         if metrics is not None:
             # only keep names of metrics
@@ -66,8 +73,8 @@ class MTLDataset(PreparedDataset):
 
     def __init__(self, datasets: Dict[str, PreparedDataset], name='MTL'):
         """
-        :param name: name of this dataset.
         :param datasets: mapping from dataset names to datasets.
+        :param name: name of this dataset.
         """
 
         super().__init__(name)
@@ -112,8 +119,18 @@ class MTLDataset(PreparedDataset):
 
 class TREC2019(PreparedDataset):
 
-    def __init__(self, name, data_file, train_file, val_file, test_file, qrels_file_test, qrels_file_val, metrics,
-                 to_probabilities, loss: Module, preprocessor: Preprocessor):
+    def __init__(self,
+                 data_file: str,
+                 train_file: str,
+                 val_file: str,
+                 test_file: str,
+                 qrels_file_test: str,
+                 qrels_file_val: str,
+                 name: str,
+                 metrics: Dict[str, ModuleDict],
+                 to_probabilities: Module,
+                 loss: Module,
+                 preprocessor: Preprocessor):
 
         super().__init__(name, metrics, to_probabilities, loss, preprocessor)
         self.name = name
@@ -226,12 +243,33 @@ class TREC2019(PreparedDataset):
         return x
 
 
-class JSONDataset(PreparedDataset):
-    def __init__(self, raw_file, train_file, val_file, test_file, num_train_samples, num_test_samples,
-                 normalize_targets, name, metrics, to_probabilities, loss: Module, preprocessor: Preprocessor):
+class JSONDataset(PreparedDataset, ABC):
+    """In-Memory dataset that reads all instances from a json file.
+    """
+
+    def __init__(self,
+                 raw_file: str,
+                 train_file: str,
+                 val_file: str,
+                 test_file: str,
+                 num_train_samples: int,
+                 num_test_samples: int,
+                 name: str,
+                 metrics: Dict[str, ModuleDict],
+                 to_probabilities: Module,
+                 loss: Module,
+                 preprocessor: Preprocessor):
+        """
+
+        :param raw_file: the full json file of samples
+        :param train_file: the json file containing the train instances. Will be generated if it doesn't exist yet.
+        :param val_file: the json file containing the validation instances. Will be generated if it doesn't exist yet.
+        :param test_file: the json file containing the test instances. Will be generated if it doesn't exist yet.
+        :param num_train_samples: the number of samples in the train split.
+        :param num_test_samples: the combined number of samples in the validation and test split. Will be split 50/50.
+        """
         super().__init__(name, metrics, to_probabilities, loss, preprocessor)
 
-        self._normalize_targets = normalize_targets
         self.num_train_samples = num_train_samples
         self.num_test_samples = num_test_samples
 
@@ -243,13 +281,78 @@ class JSONDataset(PreparedDataset):
 
         self.data = None
 
-    def __getitem__(self, index):
-        x = self.data[index]
-        query, doc, label = x['input']['query'], x['input']['passage'], x['target'][0]['label']
-        return {'x': (query, doc), 'y': torch.tensor(label)}
-
     def __len__(self):
         return len(self.data)
+
+    def _split_dataset(self, dataset):
+        assert len(dataset) >= self.num_test_samples + self.num_train_samples
+        shuffle(dataset, Random(5823905).random)
+        train_ds, val_ds = dataset[self.num_test_samples:], dataset[:self.num_test_samples]
+        train_ds = train_ds[:self.num_train_samples]
+        val_ds, test_ds = val_ds[len(val_ds) // 2:], val_ds[:len(val_ds) // 2]
+
+        return train_ds, val_ds, test_ds
+
+    def _dump_splits(self, train_ds, val_ds, test_ds):
+        with open(self.train_file, 'w', encoding='utf8') as train_fp, \
+                open(self.val_file, 'w', encoding='utf8') as val_fp, \
+                open(self.test_file, 'w', encoding='utf8') as test_fp:
+            json.dump(train_ds, train_fp)
+            json.dump(val_ds, val_fp)
+            json.dump(test_ds, test_fp)
+
+    def _get_split(self, split: DatasetSplit):
+        if split == DatasetSplit.TRAIN:
+            self.data = self._load_dataset(self.train_file)
+        elif split == DatasetSplit.VALIDATION:
+            self.data = self._load_dataset(self.val_file)
+        elif split == DatasetSplit.TEST:
+            self.data = self._load_dataset(self.test_file)
+        else:
+            raise NotImplementedError
+
+        return self
+
+    @staticmethod
+    def _load_dataset(ds_path):
+        with open(ds_path, 'r') as fp:
+            return json.load(fp)
+
+
+class RegressionJSONDataset(JSONDataset):
+    """JSONDataset with regression targets. Takes care of normalizing the targets and provides option to bucketize, in
+    order to cast to a classification task.
+    """
+
+    def __init__(self,
+                 raw_file: str,
+                 train_file: str,
+                 val_file: str,
+                 test_file: str,
+                 num_train_samples: int,
+                 num_test_samples: int,
+                 name: str,
+                 metrics: Dict[str, ModuleDict],
+                 to_probabilities: Module,
+                 loss: Module,
+                 preprocessor: Preprocessor,
+                 num_buckets: int = 1):
+        """
+        :param num_buckets: the number of buckets
+        """
+        super().__init__(raw_file, train_file, val_file, test_file, num_train_samples, num_test_samples, name, metrics,
+                         to_probabilities, loss, preprocessor)
+        self._num_buckets = num_buckets
+
+    def __getitem__(self, index):
+        x = self.data[index]
+        query, doc, label = x['input']['query'], x['input']['passage'], x['target']
+        label = torch.tensor(label)
+
+        if self._num_buckets > 1:
+            label = self.bucketize(label)
+
+        return {'x': (query, doc), 'y': label}
 
     def prepare_data(self):
         raw_dataset = to_absolute_path(self.raw_file)
@@ -259,58 +362,108 @@ class JSONDataset(PreparedDataset):
             with open(raw_dataset, 'r', encoding='utf8') as fp:
                 dataset = json.load(fp)
 
-            train_ds, val_ds, test_ds = self._split_ds(dataset)
-            if self._normalize_targets:
-                train_ds, val_ds, test_ds = self.normalize_targets(train_ds, val_ds, test_ds)
+            for x in dataset:
+                x['target'] = x['targets'][0]['label']
+                del x['targets']
 
-            with open(self.train_file, 'w', encoding='utf8') as train_fp, \
-                    open(self.val_file, 'w', encoding='utf8') as val_fp, \
-                    open(self.test_file, 'w', encoding='utf8') as test_fp:
-                json.dump(train_ds, train_fp)
-                json.dump(val_ds, val_fp)
-                json.dump(test_ds, test_fp)
+            train_ds, val_ds, test_ds = self._split_dataset(dataset)
+            train_ds, val_ds, test_ds = self.normalize_targets(train_ds, val_ds, test_ds)
 
-    def _split_ds(self, dataset):
-        shuffle(dataset, Random(5823905).random)
-        train_ds, val_ds = dataset[self.num_test_samples:], dataset[:self.num_test_samples]
-        train_ds = train_ds[:self.num_train_samples]
-        val_ds, test_ds = val_ds[len(val_ds) // 2:], val_ds[:len(val_ds) // 2]
-
-        return train_ds, val_ds, test_ds
+            self._dump_splits(train_ds, val_ds, test_ds)
 
     @staticmethod
     def normalize_targets(train_ds, val_ds, test_ds):
-        train_max = max([x['targets'][0]['label'] for x in train_ds])
-        train_min = min([x['targets'][0]['label'] for x in train_ds])
+        train_max = max([x['target'] for x in train_ds])
+        train_min = min([x['target'] for x in train_ds])
         for x in train_ds:
-            x['targets'][0]['label'] = (x['targets'][0]['label'] - train_min) / (train_max - train_min)
+            x['target'] = (x['target'] - train_min) / (train_max - train_min)
 
         for ds in [val_ds, test_ds]:
             for x in ds:
-                x['targets'][0]['label'] = max(train_min, min(x['targets'][0]['label'], train_max))
-                x['targets'][0]['label'] = (x['targets'][0]['label'] - train_min) / (train_max - train_min)
+                x['target'] = max(train_min, min(x['target'], train_max))
+                x['target'] = (x['target'] - train_min) / (train_max - train_min)
 
         return train_ds, val_ds, test_ds
 
-    def _get_split(self, split: DatasetSplit):
-        if split == DatasetSplit.TRAIN:
-            self.data = self._load_ds(self.train_file)
-        elif split == DatasetSplit.VALIDATION:
-            self.data = self._load_ds(self.val_file)
-        elif split == DatasetSplit.TEST:
-            self.data = self._load_ds(self.test_file)
-        else:
-            raise NotImplementedError
-
-        return self
-
-    @staticmethod
-    def _load_ds(ds_path):
-        with open(ds_path, 'r') as fp:
-            return json.load(fp)
+    def bucketize(self, label):
+        boundaries = torch.linspace(0, 1, self._num_buckets)[1:]
+        return torch.bucketize(label, boundaries)
 
     def collate(self, batch):
         tokenized = self.preprocessor(batch)
-        labels = torch.stack([x['y'] for x in batch]).unsqueeze(-1)
+        labels = torch.stack([x['y'] for x in batch])
+        if self._num_buckets == 1:
+            labels = labels.unsqueeze(-1)
 
         return {'x': tokenized, 'y': labels}
+
+
+class ClassificationJSONDataset(JSONDataset):
+    def __init__(self,
+                 raw_file: str,
+                 train_file: str,
+                 val_file: str,
+                 test_file: str,
+                 label_file: str,
+                 num_train_samples: int,
+                 num_test_samples: int,
+                 num_classes: int,
+                 name: str,
+                 metrics: Dict[str, ModuleDict],
+                 to_probabilities: Module,
+                 loss: Module,
+                 preprocessor: Preprocessor):
+        """
+        :param num_classes:
+        """
+        super().__init__(raw_file, train_file, val_file, test_file, num_train_samples, num_test_samples, name, metrics,
+                         to_probabilities, loss, preprocessor)
+        self._num_classes = num_classes
+        self._label_file = to_absolute_path(label_file)
+
+        self._label_to_id = None
+
+    def __getitem__(self, index):
+        if self._label_to_id is None:
+            self._load_label_to_id()
+
+        x = copy(self.data[index])
+        x['y'] = torch.tensor(self._label_to_id[x['y']], dtype=torch.long)
+        return x
+
+    def prepare_data(self):
+        raw_dataset = to_absolute_path(self.raw_file)
+        to_be_generated = list(map(to_absolute_path,
+                                   [self.train_file, self.val_file, self.test_file]))
+        if not all(map(path.exists, to_be_generated)):
+            with open(raw_dataset, 'r', encoding='utf8') as fp:
+                dataset = json.load(fp)
+
+            labels = set()
+            new_dataset = []
+            for x in dataset:
+                for target in x['targets']:
+                    labels.add(target['label'])
+
+                    x_new = {'x': (x['input']['query'], x['input']['passage']),
+                             'y': target['label'],
+                             'span1': target['span1']}
+                    if 'span2' in target:
+                        x_new['span2'] = target['span2']
+
+                    new_dataset.append(x_new)
+
+            train_ds, val_ds, test_ds = self._split_dataset(new_dataset)
+            self._dump_splits(train_ds, val_ds, test_ds)
+
+            with open(self._label_file, 'wb') as fp:
+                pickle.dump({label: i for i, label in enumerate(labels)}, fp)
+
+    def _load_label_to_id(self):
+        with open(self._label_file, 'rb') as fp:
+            self._label_to_id = pickle.load(fp)
+
+    def collate(self, batch):
+        tokenized, new_spans = self.preprocessor(batch)
+        labels = torch.stack([x['y'] for x in batch])
+        return {'x': tokenized, 'y': labels, 'meta': {'meta': new_spans}}

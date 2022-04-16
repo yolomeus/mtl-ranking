@@ -8,7 +8,7 @@ defaults:
       - mse
 
 msm_bm25:
-  _target_: datamodule.dataset.JSONDataset
+  _target_: datamodule.dataset.RegressionJSONDataset
 
   name: msm_bm25
 
