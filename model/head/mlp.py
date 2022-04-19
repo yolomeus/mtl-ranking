@@ -25,3 +25,14 @@ class MLP(MTLHead):
     def _forward(self, inputs):
         x = self.classifier(inputs)
         return x
+
+
+class DropoutLinear(MTLHead):
+    def __init__(self, out_dim: int, dropout: float, pooler: Pooler):
+        super().__init__(pooler)
+        self.dp = Dropout(dropout)
+        self.lin = Linear(pooler.out_dim, out_dim)
+
+    def _forward(self, inputs):
+        x = self.dp(inputs)
+        return self.lin(x)
