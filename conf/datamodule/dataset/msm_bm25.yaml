@@ -15,14 +15,14 @@ msm_bm25:
 
   name: msm_bm25
 
-  raw_file: data/msm/bm25/msmarco_bm25_60000_10_2022_04_08-15-40-06.json
+  raw_file: data/msm/bm25/msmarco_bm25_full_100000_10_2022_04_14-17-33-24.json
 
   train_file: data/msm/bm25/train.jsonl
   val_file: data/msm/bm25/validation.jsonl
   test_file: data/msm/bm25/test.jsonl
 
-  num_train_samples: 40000
-  num_test_samples: 20000
+  num_train_samples: 949990
+  num_test_samples: 50000
 
   # 1 means no buckets at all i.e. regression
   num_buckets: 10
