@@ -96,8 +96,16 @@ class MTLDataModule(LightningDataModule):
         :return: a single argument function that takes a list of tuples/instances and returns a batch as tensor or a
         tuple of multiple batch tensors.
         """
+        if split == DatasetSplit.TRAIN:
+            ds = self._train_ds
+        elif split == DatasetSplit.VALIDATION:
+            ds = self._val_ds
+        elif split == DatasetSplit.TEST:
+            ds = self._test_ds
+        else:
+            raise NotImplementedError
 
-        return partial(collate, dataset=self._dataset)
+        return partial(collate, dataset=ds)
 
 
 def collate(batch, dataset):
