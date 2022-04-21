@@ -1,1 +1,2 @@
 _target_: datamodule.preprocessor.BERT
+use_fast_tokenizer: True

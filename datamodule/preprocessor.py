@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List
 
 import spacy as spacy
-from transformers import BertTokenizer
+from transformers import BertTokenizer, BertTokenizerFast
 
 
 class Preprocessor(ABC):
@@ -22,22 +22,25 @@ class BERT(Preprocessor):
     """Tokenizes query and doc pairs to produce BERT input tensors.
     """
 
-    def __init__(self):
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    def __init__(self, use_fast_tokenizer):
+        if use_fast_tokenizer:
+            self.bert_tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
+        else:
+            self.bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     def preprocess(self, batch):
         queries, docs = zip(*[x['x'] for x in batch])
-        tokenized = self.tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
+        tokenized = self.bert_tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
         return tokenized
 
 
-class BERTRetokenization(Preprocessor):
+class BERTRetokenization(BERT):
     """A preprocessor that expects pre-computed meta based on SpaCy tokenization. BERT tokenization is applied
     and the meta are recomputed accordingly.
     """
 
-    def __init__(self):
-        self.bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    def __init__(self, use_fast_tokenizer):
+        super().__init__(use_fast_tokenizer)
         self.spacy_tokenizer = self._get_spacy_tokenizer()
 
     def preprocess(self, batch):

@@ -9,7 +9,7 @@ dependencies:
   - pytorch=1.11.0
   - cudatoolkit=11.3
   - pytorch-lightning=1.6.0
-  - transformers=4.16.2
+  - transformers=4.15.0
   - h5py=3.3.0
   - hdf5=1.10.6
   - spacy=3.2.1
