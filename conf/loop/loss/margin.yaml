@@ -1,0 +1,2 @@
+_target_: loss.PairwiseMarginLoss
+margin: 0.2

@@ -5,6 +5,7 @@ import torch
 from omegaconf import DictConfig
 from torch import Tensor, tensor
 from torch.nn import Module, ModuleDict
+from torchmetrics.functional import mean_squared_error
 
 
 class MultiTaskLoss(Module, ABC):
@@ -51,6 +52,8 @@ class MuppetLoss(MultiTaskLoss):
                                                y_true[task_name])
 
             n_classes = y_pred[task_name].shape[-1]
+            if n_classes == 1:
+                n_classes += 1
             assert n_classes > 1
             n_classes = tensor(n_classes, device=task_loss.device)
 
@@ -58,3 +61,31 @@ class MuppetLoss(MultiTaskLoss):
             total_loss += loss
 
         return total_loss
+
+
+class PairwiseMarginLoss(Module):
+    """Pairwise ranking loss expecting a (batch_size, 2) prediction tensor with positive and negative example scores at
+    the last dimension and no labels. Returns MSE instead if labels are provided.
+    """
+
+    def __init__(self, margin):
+        super().__init__()
+        self.margin = margin
+
+    def forward(self, y_pred, y_true=None):
+        """
+
+        :param y_pred: tensor of shape (batch_size, 2) where the last 2 dimensions indicate relevance score for positive
+        and negative examples respectively.
+        :param y_true: if y_true is provided, MSE between y_pred and y_true will be returned, e.g. for having a loss
+        value for validation.
+        """
+        if y_pred.shape[-1] == 2:
+            assert y_true is None, 'ranking loss expects'
+            y_pred = y_pred.sigmoid()
+            y_pos = y_pred[:, 0]
+            y_neg = y_pred[:, 1]
+            return torch.mean(torch.clamp(self.margin - y_pos + y_neg, min=0))
+
+        assert y_pred.shape[-1] == 1
+        return mean_squared_error(y_pred.sigmoid().squeeze(), y_true)
