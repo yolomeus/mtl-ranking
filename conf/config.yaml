@@ -4,7 +4,7 @@ defaults:
   - loop: multitask_loop
 
 gpus: 1
-num_workers: 4
+num_workers: 8
 random_seed: 1590258941
 
 training:
@@ -12,7 +12,7 @@ training:
   warmup_steps: 10000
   batch_size: 32
   accumulate_batches: 1
-  precision: 32
+  precision: 16
   # checkpointing
   save_ckpts: 10
   monitor: val/trec_map/trec2019
