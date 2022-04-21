@@ -1,5 +1,6 @@
 from typing import Dict
 
+import torch
 from torch.nn import Module, ModuleDict
 
 from model.body.base import MTLBody
@@ -21,9 +22,25 @@ class MultiTaskModel(Module):
         :param meta: a mapping from head name to any additional data that needs to be passed to.
         :return: a dict mapping from output module names to corresponding predictions.
         """
-        preds = {name: self.heads[name](self.body(batch), meta[name])
-                 for name, batch in name_to_batch.items()}
+
+        preds = {}
+        for name in name_to_batch:
+            batch = name_to_batch[name]
+            if meta[name] and meta[name].get('pairwise'):
+                preds[name] = self._pairwise_forward(name, batch, meta)
+            else:
+                preds[name] = self._dataset_forward(name, batch, meta)
+
         return preds
+
+    def _dataset_forward(self, name, inputs, meta):
+        return self.heads[name](self.body(inputs), meta[name])
+
+    def _pairwise_forward(self, name, inputs, meta):
+        preds_pos = self._dataset_forward(name, inputs['pos'], meta)
+        preds_neg = self._dataset_forward(name, inputs['neg'], meta)
+
+        return torch.cat([preds_pos, preds_neg], dim=-1)
 
     @property
     def output_names(self):
