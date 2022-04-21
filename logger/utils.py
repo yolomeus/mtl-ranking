@@ -39,12 +39,15 @@ class MultiTaskMetrics(Module):
         loop.log(f'{split.value}/loss', loss.detach(), on_step=True, on_epoch=True, batch_size=total_batch_size)
 
     def _select_metrics(self, dataset_name, split):
-        if split == DatasetSplit.TRAIN:
-            return self.metrics[dataset_name]['train_metrics']
-        elif split == DatasetSplit.TEST:
-            return self.metrics[dataset_name]['test_metrics']
+        try:
+            if split == DatasetSplit.TRAIN:
+                return self.metrics[dataset_name]['train_metrics']
+            elif split == DatasetSplit.TEST:
+                return self.metrics[dataset_name]['test_metrics']
 
-        return self.metrics[dataset_name]['val_metrics']
+            return self.metrics[dataset_name]['val_metrics']
+        except KeyError:
+            return {}
 
     @staticmethod
     def _build_metric_module(dataset_cfgs):
