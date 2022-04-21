@@ -52,7 +52,9 @@ def train(cfg: DictConfig):
                       logger=logger,
                       callbacks=[model_checkpoint, early_stopping, LearningRateMonitor()],
                       accumulate_grad_batches=train_cfg.accumulate_batches,
-                      precision=train_cfg.precision)
+                      precision=train_cfg.precision,
+                      replace_sampler_ddp=False,
+                      accelerator='ddp')
 
     # do not instantiate datamodule recursively,
     # we need to pass the dataset object to the sampler constructors

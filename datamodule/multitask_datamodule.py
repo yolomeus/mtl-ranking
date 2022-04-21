@@ -1,6 +1,7 @@
 from functools import partial
 from typing import Optional
 
+from catalyst.data import DistributedSamplerWrapper
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from pytorch_lightning import LightningDataModule
@@ -50,9 +51,13 @@ class MTLDataModule(LightningDataModule):
         self._val_ds = self._dataset.get_split(DatasetSplit.VALIDATION)
         self._test_ds = self._dataset.get_split(DatasetSplit.TEST)
 
-        self._train_sampler = instantiate(self._train_sampler_cfg, data_source=self._train_ds)
-        self._val_sampler = instantiate(self._val_sampler_cfg, data_source=self._val_ds)
-        self._test_sampler = instantiate(self._test_sampler_cfg, data_source=self._test_ds)
+        train_sampler = instantiate(self._train_sampler_cfg, data_source=self._train_ds)
+        val_sampler = instantiate(self._val_sampler_cfg, data_source=self._val_ds)
+        test_sampler = instantiate(self._test_sampler_cfg, data_source=self._test_ds)
+
+        self._train_sampler = DistributedSamplerWrapper(train_sampler)
+        self._val_sampler = DistributedSamplerWrapper(val_sampler)
+        self._test_sampler = DistributedSamplerWrapper(test_sampler)
 
     def train_dataloader(self):
         train_dl = DataLoader(self._train_ds,

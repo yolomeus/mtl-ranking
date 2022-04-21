@@ -25,10 +25,9 @@ class CustomRetrievalMixin(RetrievalMetric, ABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # replace original state variables
-        self.add_state("indexes", default=torch.empty(0, dtype=torch.int32), dist_reduce_fx=None)
-        self.add_state("preds", default=torch.empty(0, dtype=torch.float32), dist_reduce_fx=None)
-        self.add_state("target", default=torch.empty(0, dtype=torch.int32), dist_reduce_fx=None)
-        self.add_state("idx", default=torch.zeros((1,), dtype=torch.long))
+        self.add_state("indexes", default=torch.empty(0, dtype=torch.int32), dist_reduce_fx='cat')
+        self.add_state("preds", default=torch.empty(0, dtype=torch.float32), dist_reduce_fx='cat')
+        self.add_state("target", default=torch.empty(0, dtype=torch.int32), dist_reduce_fx='cat')
 
     def update(self, preds: Tensor, target: Tensor, indexes: Tensor) -> None:
         # we expect 2D predictions with the second dimension representing a relevance score.
@@ -45,8 +44,6 @@ class CustomRetrievalMixin(RetrievalMetric, ABC):
         self.indexes = torch.cat([self.indexes, indexes.to(torch.int32)])
         self.preds = torch.cat([self.preds, preds])
         self.target = torch.cat([self.target, target.to(torch.int32)])
-
-        self.idx += len(indexes)
 
     def compute(self) -> Tensor:
         # this is identical to `RetrievalMetric`´s compute except that we do not have to concatenate the python lists
