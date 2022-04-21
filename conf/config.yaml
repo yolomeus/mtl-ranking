@@ -14,7 +14,7 @@ training:
   accumulate_batches: 1
   precision: 16
   # checkpointing
-  save_ckpts: 10
+  save_ckpts: 3
   monitor: val/trec_map/trec2019
   mode: max
   patience: 3
