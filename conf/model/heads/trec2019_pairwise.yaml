@@ -1,0 +1,9 @@
+defaults:
+  - pooler: cls_token
+
+_target_: model.head.mlp.DropoutLinear
+out_dim: 1
+dropout: 0.1
+
+pooler:
+  layers: [ 12 ]

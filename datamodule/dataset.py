@@ -258,6 +258,43 @@ class TREC2019(PreparedDataset):
         return x
 
 
+class TREC2019Pairwise(TREC2019):
+
+    def __getitem__(self, index):
+        if self.split != DatasetSplit.TRAIN:
+            return super().__getitem__(index)
+
+        with h5py.File(self.current_file, "r") as fp:
+            q_id = fp['q_ids'][index]
+            pos_doc_id = fp['pos_doc_ids'][index]
+            neg_doc_id = fp['neg_doc_ids'][index]
+
+        with h5py.File(self._data_file, "r") as fp:
+            query = fp['queries'].asstr()[q_id]
+            pos_doc = fp['docs'].asstr()[pos_doc_id]
+            neg_doc = fp['docs'].asstr()[neg_doc_id]
+
+        x = {'query': query, 'pos_doc': pos_doc, 'neg_doc': neg_doc}
+        return x
+
+    def collate(self, batch):
+        if self.split != DatasetSplit.TRAIN:
+            return super().collate(batch)
+
+        pos_batch = []
+        neg_batch = []
+        for x in batch:
+            x_pos = {'x': (x['query'], x['pos_doc'])}
+            x_neg = {'x': (x['query'], x['neg_doc'])}
+            pos_batch.append(x_pos)
+            neg_batch.append(x_neg)
+
+        pos_tokenized = self.preprocessor(pos_batch)
+        neg_tokenized = self.preprocessor(neg_batch)
+
+        return {'x': {'pos': pos_tokenized, 'neg': neg_tokenized}, 'y': None, 'meta': {'pairwise': True}}
+
+
 class JSONDataset(PreparedDataset, ABC):
     """In-Memory dataset that reads all instances from a json file.
     """

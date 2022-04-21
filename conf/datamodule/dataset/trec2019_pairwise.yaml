@@ -1,0 +1,59 @@
+defaults:
+  - preprocessor@trec2019_pairwise.preprocessor: bert
+  - metrics@trec2019_pairwise.metrics.train_metrics:
+      - pairwise_accuracy
+  - metrics@trec2019_pairwise.metrics.val_metrics:
+      - accuracy
+      - f1score
+      - precision@10
+      - precision@20
+      - mrr
+      - trec_map
+      - trec_ndcg@10
+      - trec_ndcg@20
+  - metrics@trec2019_pairwise.metrics.test_metrics:
+      - accuracy
+      - f1score
+      - precision@10
+      - precision@20
+      - mrr
+      - trec_map
+      - trec_ndcg@10
+      - trec_ndcg@20
+
+  - /loop/loss@trec2019_pairwise.loss: margin
+
+trec2019_pairwise:
+  _target_: datamodule.dataset.TREC2019Pairwise
+
+  name: trec2019_pairwise
+
+  data_file: data/trec/trecdl_passage_2019/data.h5
+  train_file: data/trec/trecdl_passage_2019/fold_0/train_pairwise.h5
+  val_file: data/trec/trecdl_passage_2019/fold_0/val.h5
+  test_file: data/trec/trecdl_passage_2019/fold_0/test.h5
+
+  qrels_file_test: data/trec/trec_eval_files/2019qrels-pass.txt
+  qrels_file_val: data/trec/trec_eval_files/2019-qrels-pass.dev.tsv
+
+  to_probabilities:
+    _target_: torch.nn.Sigmoid
+
+  # override metric parameters for this dataset
+  metrics:
+    val_metrics:
+      f1score:
+        num_classes: 2
+        multiclass: True
+
+      trec_map:
+        qrels_file: data/trec/trec_eval_files/2019-qrels-pass.dev.tsv
+      trec_ndcg@10:
+        qrels_file: data/trec/trec_eval_files/2019-qrels-pass.dev.tsv
+      trec_ndcg@20:
+        qrels_file: data/trec/trec_eval_files/2019-qrels-pass.dev.tsv
+
+    test_metrics:
+      f1score:
+        num_classes: 2
+        multiclass: True
