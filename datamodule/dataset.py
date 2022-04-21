@@ -152,26 +152,10 @@ class TREC2019(PreparedDataset):
 
     def __getitem__(self, index):
         with h5py.File(self.current_file, 'r') as fp:
-            q_id = fp['q_ids'][index]
-            doc_id = fp['doc_ids'][index]
+            q_id, doc_id, og_q_id, og_doc_id = self.get_ids(fp, index)
+            label, label_rank = self.get_label(fp, index, og_q_id, og_doc_id)
 
-            og_q_id = torch.tensor(self.get_original_query_id(q_id))
-            og_doc_id = torch.tensor(self.get_original_document_id(doc_id))
-
-            label_rank = None
-            if self.split == DatasetSplit.TEST:
-                label_rank = self.get_qrel(og_q_id, og_doc_id, self.qrels_test)
-            elif self.split == DatasetSplit.VALIDATION:
-                label_rank = self.get_qrel(og_q_id, og_doc_id, self.qrels_val)
-            else:
-                label = torch.tensor([fp['labels'][index]], dtype=torch.long)
-
-        if label_rank is not None:
-            label = torch.tensor(int(label_rank > 0))
-
-        with h5py.File(self._data_file, 'r') as fp:
-            query = fp['queries'].asstr()[q_id]
-            doc = fp['docs'].asstr()[doc_id]
+        query, doc = self.get_query_and_doc(q_id, doc_id)
 
         x = {'q_id': og_q_id, 'doc_id': og_doc_id, 'x': (query, doc), 'y': label.squeeze()}
         if label_rank is not None:
@@ -199,6 +183,37 @@ class TREC2019(PreparedDataset):
             raise NotImplementedError()
 
         return self
+
+    def get_ids(self, fp, index):
+        q_id = fp['q_ids'][index]
+        doc_id = fp['doc_ids'][index]
+
+        og_q_id = torch.tensor(self.get_original_query_id(q_id))
+        og_doc_id = torch.tensor(self.get_original_document_id(doc_id))
+
+        return q_id, doc_id, og_q_id, og_doc_id
+
+    def get_query_and_doc(self, q_id, doc_id):
+        with h5py.File(self._data_file, 'r') as fp:
+            query = fp['queries'].asstr()[q_id]
+            doc = fp['docs'].asstr()[doc_id]
+
+        return query, doc
+
+    def get_label(self, fp, index, og_q_id, og_doc_id):
+        label = None
+        label_rank = None
+        if self.split == DatasetSplit.TEST:
+            label_rank = self.get_qrel(og_q_id, og_doc_id, self.qrels_test)
+        elif self.split == DatasetSplit.VALIDATION:
+            label_rank = self.get_qrel(og_q_id, og_doc_id, self.qrels_val)
+        else:
+            label = torch.tensor([fp['labels'][index]], dtype=torch.long)
+
+        if label_rank is not None:
+            label = torch.tensor(int(label_rank > 0))
+
+        return label, label_rank
 
     def get_original_query_id(self, q_id: int):
         with h5py.File(self._data_file, 'r') as fp:
