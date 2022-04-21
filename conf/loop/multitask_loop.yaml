@@ -1,6 +1,6 @@
 defaults:
   - loss: sum_loss
-  - optimizer: adam
+  - optimizer: adam_w
 
 _target_: loop.MultiTaskLoop
 
