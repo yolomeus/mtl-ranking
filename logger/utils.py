@@ -19,7 +19,7 @@ class MultiTaskMetrics(Module):
                                            for ds_name, ds in dataset_cfgs.items()})
 
     def forward(self, loop, y_pred, y_true, meta, split: DatasetSplit):
-        total_batch_size = sum([len(x) for x in y_true.values()])
+        total_batch_size = sum([len(x) for x in y_pred.values()])
 
         for dataset_name in y_pred.keys():
             y_prob = self.to_probabilites[dataset_name](y_pred[dataset_name]).detach()
@@ -33,7 +33,7 @@ class MultiTaskMetrics(Module):
                          metric,
                          on_step=False,
                          on_epoch=True,
-                         batch_size=len(y_true[dataset_name]))
+                         batch_size=len(y_pred[dataset_name]))
 
         loss = loop.loss(y_pred, y_true)
         loop.log(f'{split.value}/loss', loss.detach(), on_step=True, on_epoch=True, batch_size=total_batch_size)
