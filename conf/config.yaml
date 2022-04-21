@@ -17,13 +17,13 @@ training:
   save_ckpts: 10
   monitor: val/trec_map/trec2019
   mode: max
-  patience: 5
+  patience: 3
 
 testing:
   batch_size: ${training.batch_size}
 
 logger:
-  project: mtl-ranking
+  project: debug
   _target_: logger.loggers.WandbMinMaxLogger
 log_gradients: False
 
