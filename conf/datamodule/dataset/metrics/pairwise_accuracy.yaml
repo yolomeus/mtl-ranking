@@ -1,0 +1,2 @@
+pairwise_accuracy:
+  _target_: metrics.PairwiseAccuracy

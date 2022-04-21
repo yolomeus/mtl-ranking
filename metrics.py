@@ -5,7 +5,7 @@ from collections import defaultdict
 import torch
 from hydra.utils import to_absolute_path
 from torch import Tensor, tensor
-from torchmetrics import RetrievalPrecision, RetrievalMRR, RetrievalMAP, RetrievalNormalizedDCG
+from torchmetrics import RetrievalPrecision, RetrievalMRR, RetrievalMAP, RetrievalNormalizedDCG, Accuracy
 from torchmetrics.retrieval import RetrievalMetric
 from torchmetrics.utilities.checks import _check_retrieval_inputs
 from torchmetrics.utilities.data import get_group_indexes
@@ -211,3 +211,13 @@ class TrecNDCG(TrecMetric):
     def _discount(n, device):
         x = torch.arange(1, n + 1, 1, device=device)
         return torch.log2(x + 1)
+
+
+class PairwiseAccuracy(Accuracy):
+    def update(self, preds: Tensor, target: Tensor = None) -> None:
+        assert target is None, 'pairwise accuracy expects a prediction tensor only'
+        preds_pos, preds_neg = preds[:, 0], preds[:, 1]
+        labels_pos = torch.ones_like(preds_pos, dtype=torch.long)
+        labels_neg = torch.zeros_like(preds_neg, dtype=torch.long)
+        preds, labels = torch.cat([preds_pos, preds_neg], dim=0), torch.cat([labels_pos, labels_neg], dim=0)
+        super().update(preds, labels)
