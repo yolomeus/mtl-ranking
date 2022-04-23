@@ -88,4 +88,4 @@ class PairwiseMarginLoss(Module):
             return torch.mean(torch.clamp(self.margin - y_pos + y_neg, min=0))
 
         assert y_pred.shape[-1] == 1
-        return mean_squared_error(y_pred.sigmoid().squeeze(), y_true)
+        return mean_squared_error(y_pred.sigmoid(), y_true)

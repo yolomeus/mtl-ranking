@@ -32,8 +32,9 @@ class CustomRetrievalMixin(RetrievalMetric, ABC):
 
     def update(self, preds: Tensor, target: Tensor, indexes: Tensor) -> None:
         # we expect 2D predictions with the second dimension representing a relevance score.
-        preds = preds[:, -1]
-
+        if preds.shape[-1] == 2:
+            preds = preds[:, -1]
+        preds, target, indexes = preds.squeeze(), target.squeeze(), indexes.squeeze()
         if indexes is None:
             raise ValueError("Argument `indexes` cannot be None")
 

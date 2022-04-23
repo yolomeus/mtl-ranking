@@ -157,7 +157,7 @@ class TREC2019(PreparedDataset):
 
         query, doc = self.get_query_and_doc(q_id, doc_id)
 
-        x = {'q_id': og_q_id, 'doc_id': og_doc_id, 'x': (query, doc), 'y': label.squeeze()}
+        x = {'q_id': og_q_id, 'doc_id': og_doc_id, 'x': (query, doc), 'y': label}
         if label_rank is not None:
             x['y_rank'] = label_rank
 
@@ -246,7 +246,7 @@ class TREC2019(PreparedDataset):
     def collate(self, batch):
         tokenized = self.preprocessor(batch)
 
-        labels = torch.stack([x['y'] for x in batch])
+        labels = torch.stack([x['y'] for x in batch]).unsqueeze(-1)
         q_ids = torch.stack([x['q_id'] for x in batch])
 
         x = {'x': tokenized, 'y': labels, 'meta': {'indexes': q_ids}}
