@@ -246,7 +246,7 @@ class TREC2019(PreparedDataset):
     def collate(self, batch):
         tokenized = self.preprocessor(batch)
 
-        labels = torch.stack([x['y'] for x in batch]).unsqueeze(-1)
+        labels = torch.stack([x['y'] for x in batch]).squeeze()
         q_ids = torch.stack([x['q_id'] for x in batch])
 
         x = {'x': tokenized, 'y': labels, 'meta': {'indexes': q_ids}}
@@ -279,7 +279,9 @@ class TREC2019Pairwise(TREC2019):
 
     def collate(self, batch):
         if self.split != DatasetSplit.TRAIN:
-            return super().collate(batch)
+            x = super().collate(batch)
+            x['y'] = x['y'].unsqueeze(-1)
+            return x
 
         pos_batch = []
         neg_batch = []

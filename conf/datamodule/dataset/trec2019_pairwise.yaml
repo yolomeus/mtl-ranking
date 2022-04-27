@@ -1,8 +1,8 @@
 defaults:
-  - preprocessor@trec2019_pairwise.preprocessor: bert
-  - metrics@trec2019_pairwise.metrics.train_metrics:
+  - preprocessor@trec2019.preprocessor: bert
+  - metrics@trec2019.metrics.train_metrics:
       - pairwise_accuracy
-  - metrics@trec2019_pairwise.metrics.val_metrics:
+  - metrics@trec2019.metrics.val_metrics:
       - accuracy
       - f1score
       - precision@10
@@ -11,7 +11,7 @@ defaults:
       - trec_map
       - trec_ndcg@10
       - trec_ndcg@20
-  - metrics@trec2019_pairwise.metrics.test_metrics:
+  - metrics@trec2019.metrics.test_metrics:
       - accuracy
       - f1score
       - precision@10
@@ -21,12 +21,12 @@ defaults:
       - trec_ndcg@10
       - trec_ndcg@20
 
-  - /loop/loss@trec2019_pairwise.loss: margin
+  - /loop/loss@trec2019.loss: margin
 
-trec2019_pairwise:
+trec2019:
   _target_: datamodule.dataset.TREC2019Pairwise
 
-  name: trec2019_pairwise
+  name: trec2019
 
   data_file: data/trec/trecdl_passage_2019/data.h5
   train_file: data/trec/trecdl_passage_2019/fold_0/train_pairwise.h5
