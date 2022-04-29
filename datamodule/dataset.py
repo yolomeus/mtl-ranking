@@ -9,6 +9,7 @@ from random import shuffle, Random
 from typing import Tuple, Dict
 
 import h5py
+import numpy as np
 import torch
 from hydra.utils import to_absolute_path
 from torch.nn import ModuleDict, Module
@@ -248,8 +249,9 @@ class TREC2019(PreparedDataset):
 
         labels = torch.stack([x['y'] for x in batch]).squeeze()
         q_ids = torch.stack([x['q_id'] for x in batch])
+        doc_ids = torch.stack([x['doc_id'] for x in batch])
 
-        x = {'x': tokenized, 'y': labels, 'meta': {'indexes': q_ids}}
+        x = {'x': tokenized, 'y': labels, 'meta': {'indexes': q_ids, 'doc_ids': doc_ids}}
 
         if batch[0].get('y_rank', None) is not None:
             y_rank = torch.stack([x['y_rank'] for x in batch])
@@ -397,6 +399,7 @@ class RegressionJSONDataset(JSONDataset):
         super().__init__(raw_file, train_file, val_file, test_file, num_train_samples, num_test_samples, name, metrics,
                          to_probabilities, loss, preprocessor)
         self._num_buckets = num_buckets
+        self._buckets = torch.linspace(0, 1, self._num_buckets + 1)[1:]
 
     def __getitem__(self, index):
         x = self.data[index]
@@ -425,23 +428,31 @@ class RegressionJSONDataset(JSONDataset):
 
             self._dump_splits(train_ds, val_ds, test_ds)
 
-    @staticmethod
-    def normalize_targets(train_ds, val_ds, test_ds):
-        train_max = max([x['target'] for x in train_ds])
-        train_min = min([x['target'] for x in train_ds])
-        for x in train_ds:
-            x['target'] = (x['target'] - train_min) / (train_max - train_min)
+    def normalize_targets(self, train_ds, val_ds, test_ds):
+        train_targets = np.array([x['target'] for x in train_ds])
+        mean, std = np.mean(train_targets), np.std(train_targets)
 
-        for ds in [val_ds, test_ds]:
-            for x in ds:
-                x['target'] = max(train_min, min(x['target'], train_max))
-                x['target'] = (x['target'] - train_min) / (train_max - train_min)
+        for ds in [train_ds, val_ds, test_ds]:
+            targets = np.array([x['target'] for x in ds])
+            targets = self.z_scale(targets, mean, std)
+
+            # shift and scale since we will clip and bucketize from 0-1
+            # by using .25 we clip anything that deviates more than 2*std from the mean
+            targets = 0.25 * targets + 0.5
+            targets = np.clip(targets, 0, 1)
+
+            for x, t in zip(ds, targets):
+                x['target'] = float(t)
 
         return train_ds, val_ds, test_ds
 
+    @staticmethod
+    def z_scale(x, mean, std):
+        return (x - mean) / std
+
     def bucketize(self, label):
-        boundaries = torch.linspace(0, 1, self._num_buckets)[1:]
-        return torch.bucketize(label, boundaries)
+        x = torch.bucketize(label, self._buckets)
+        return x
 
     def collate(self, batch):
         tokenized = self.preprocessor(batch)
