@@ -8,6 +8,8 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 
+from callbacks import TestPredictionWriter
+
 
 @hydra.main(config_path='conf', config_name='config')
 def train(cfg: DictConfig):
@@ -47,10 +49,12 @@ def train(cfg: DictConfig):
         # setting to True will use the default logger
         logger = True
 
+    preds_dir = os.path.join(os.getcwd(), 'predictions/')
     trainer = Trainer(max_epochs=train_cfg.epochs,
                       gpus=cfg.gpus,
                       logger=logger,
-                      callbacks=[model_checkpoint, early_stopping, LearningRateMonitor()],
+                      callbacks=[model_checkpoint, early_stopping, LearningRateMonitor(),
+                                 TestPredictionWriter(preds_dir)],
                       accumulate_grad_batches=train_cfg.accumulate_batches,
                       precision=train_cfg.precision)
 
