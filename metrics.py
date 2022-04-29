@@ -31,6 +31,7 @@ class CustomRetrievalMixin(RetrievalMetric, ABC):
         self.add_state("idx", default=torch.zeros((1,), dtype=torch.long))
 
     def update(self, preds: Tensor, target: Tensor, indexes: Tensor) -> None:
+        assert len(preds.shape) == 1 or preds.shape[-1] == 1 or preds.shape[-1] == 2
         # we expect 2D predictions with the second dimension representing a relevance score.
         if preds.shape[-1] == 2:
             preds = preds[:, -1]
