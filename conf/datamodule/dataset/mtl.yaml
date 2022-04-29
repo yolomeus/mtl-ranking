@@ -2,7 +2,7 @@ defaults:
   - ../dataset@datasets:
       # - msm_ner
       - msm_bm25
-      - trec2019_pairwise
+      - trec2019
 
 _target_: datamodule.dataset.MTLDataset
 
