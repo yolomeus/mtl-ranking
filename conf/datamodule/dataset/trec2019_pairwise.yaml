@@ -33,7 +33,7 @@ defaults:
 trec2019:
   _target_: datamodule.dataset.TREC2019Pairwise
 
-  name: trec2019_pairwise
+  name: trec2019
 
   data_file: data/trec/trecdl_passage_2019/data.h5
   train_file: data/trec/trecdl_passage_2019/fold_0/train_pairwise.h5
