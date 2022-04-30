@@ -80,7 +80,7 @@ class MTLDataset(PreparedDataset):
 
         super().__init__(name)
         self.datasets = list(datasets.values())
-        self.name_to_idx = {x: i for i, x in enumerate(list(datasets.keys()))}
+        self.name_to_idx = {x.name: i for i, x in enumerate(self.datasets)}
         self.num_datasets = len(datasets)
 
         self._dataset_sizes = None

@@ -15,7 +15,7 @@ class MultiTaskLoss(Module, ABC):
 
     def __init__(self, datasets: DictConfig):
         super().__init__()
-        name_to_loss = {name: ds.loss for name, ds in datasets.items()}
+        name_to_loss = {ds.name: ds.loss for ds in datasets.values()}
         self.losses = ModuleDict(name_to_loss)
 
     @abstractmethod

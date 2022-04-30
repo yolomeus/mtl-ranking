@@ -15,8 +15,8 @@ class MultiTaskMetrics(Module):
         super().__init__()
 
         self.metrics = self._build_metric_module(dataset_cfgs)
-        self.to_probabilites = ModuleDict({ds_name: instantiate(ds.to_probabilities)
-                                           for ds_name, ds in dataset_cfgs.items()})
+        self.to_probabilites = ModuleDict({ds.name: instantiate(ds.to_probabilities)
+                                           for ds in dataset_cfgs.values()})
 
     def forward(self, loop, y_pred, y_true, meta, split: DatasetSplit):
         total_batch_size = sum([len(x) for x in y_pred.values()])
@@ -52,7 +52,8 @@ class MultiTaskMetrics(Module):
     @staticmethod
     def _build_metric_module(dataset_cfgs):
         ds_to_metrics = defaultdict(dict)
-        for ds_name, ds_cfg in dataset_cfgs.items():
+        for ds_cfg in dataset_cfgs.values():
+            ds_name = ds_cfg.name
             for split, metric_cfgs in ds_cfg.metrics.items():
                 ds_to_metrics[ds_name][split] = ModuleDict(
                     {m_name: instantiate(m) for m_name, m in metric_cfgs.items()})
