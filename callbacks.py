@@ -38,7 +38,9 @@ class TestPredictionWriter(Callback):
                 if ds_name.startswith('trec2019'):
                     meta = outputs['meta'][ds_name]
                     batch_meta = batch[2][ds_name]
-                    to_write = [batch_meta['indexes'], batch_meta['doc_ids'], preds[:, 1], meta['y_rank']]
+                    if len(preds.shape) == 2 and preds.shape[-1] == 2:
+                        preds = preds[:, 1]
+                    to_write = [batch_meta['indexes'], batch_meta['doc_ids'], preds, meta['y_rank']]
                 else:
                     to_write = [preds.argmax(-1), outputs['y_true'][ds_name]]
 
