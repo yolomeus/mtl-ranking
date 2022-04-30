@@ -6,21 +6,26 @@ defaults:
   - metrics@trec2019.metrics.val_metrics:
       - accuracy
       - f1score
-      - precision@10
-      - precision@20
       - mrr
       - trec_map
       - trec_ndcg@10
-      - trec_ndcg@20
+      - precision@10
   - metrics@trec2019.metrics.test_metrics:
       - accuracy
       - f1score
-      - precision@10
-      - precision@20
+
       - mrr
       - trec_map
+
+      - precision@10
+      - precision@20
+      - precision@50
+      - precision@100
+
       - trec_ndcg@10
       - trec_ndcg@20
+      - trec_ndcg@50
+      - trec_ndcg@100
 trec2019:
   _target_: datamodule.dataset.TREC2019
 
@@ -53,8 +58,6 @@ trec2019:
       trec_map:
         qrels_file: data/trec/trec_eval_files/2019-qrels-pass.dev.tsv
       trec_ndcg@10:
-        qrels_file: data/trec/trec_eval_files/2019-qrels-pass.dev.tsv
-      trec_ndcg@20:
         qrels_file: data/trec/trec_eval_files/2019-qrels-pass.dev.tsv
 
     test_metrics:

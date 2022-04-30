@@ -1,0 +1,3 @@
+precision@50:
+  _target_: metrics.Precision
+  k: 50

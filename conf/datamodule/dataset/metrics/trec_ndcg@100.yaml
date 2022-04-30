@@ -1,0 +1,4 @@
+trec_ndcg@100:
+  _target_: metrics.TrecNDCG
+  qrels_file: data/trec/trec_eval_files/2019qrels-pass.txt
+  k: 100
