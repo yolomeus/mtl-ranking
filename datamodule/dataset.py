@@ -251,8 +251,10 @@ class TREC2019(PreparedDataset):
         q_ids = torch.stack([x['q_id'] for x in batch])
         doc_ids = torch.stack([x['doc_id'] for x in batch])
 
-        x = {'x': tokenized, 'y': labels, 'meta': {'indexes': q_ids, 'doc_ids': doc_ids}}
+        if len(labels.shape) == 0:
+            labels = labels.unsqueeze(0)
 
+        x = {'x': tokenized, 'y': labels, 'meta': {'indexes': q_ids, 'doc_ids': doc_ids}}
         if batch[0].get('y_rank', None) is not None:
             y_rank = torch.stack([x['y_rank'] for x in batch])
             x['meta']['y_rank'] = y_rank
@@ -531,4 +533,7 @@ class ClassificationJSONDataset(JSONDataset):
     def collate(self, batch):
         tokenized, new_spans = self.preprocessor(batch)
         labels = torch.stack([x['y'] for x in batch])
+        # prevent empty shape for batch size 1
+        if len(labels.shape) == 0:
+            labels = labels.unsqueeze(0)
         return {'x': tokenized, 'y': labels, 'meta': {'spans': torch.tensor(new_spans, dtype=torch.long)}}
