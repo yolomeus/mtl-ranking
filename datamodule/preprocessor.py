@@ -89,7 +89,7 @@ class BERTRetokenization(BERT):
     @staticmethod
     def _get_spacy_tokenizer():
         if not spacy.util.is_package('en_core_web_sm'):
-            spacy.cli.download('en_core_web_sm')
+            spacy.cli.download('en_core_web_sm-3.2.0', direct=True)
 
         import en_core_web_sm
         return en_core_web_sm.load().tokenizer

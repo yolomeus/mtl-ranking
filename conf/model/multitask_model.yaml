@@ -1,7 +1,7 @@
 defaults:
   - body: bert_base_uncased
-  # - heads@heads.msm_ner: msm_ner
-  - heads@heads.msm_bm25: msm_bm25
+  # - heads@heads.msm_bm25: msm_bm25
+  - heads@heads.msm_ner: msm_ner
   - heads@heads.trec2019: trec2019
 
 _target_: model.multitask.MultiTaskModel
