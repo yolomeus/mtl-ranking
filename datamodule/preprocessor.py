@@ -75,6 +75,10 @@ class BERTRetokenization(BERT):
         span_retokenized = self.bert_tokenizer(text_original_span,
                                                add_special_tokens=False)['input_ids']
 
+        # for some special characters the tokenizer returns an empty list instead of the unk token
+        if len(span_retokenized) == 0:
+            span_retokenized = [self.bert_tokenizer.unk_token_id]
+
         sep_pos = len(self.bert_tokenizer(query, add_special_tokens=False))
 
         a, b = left_retokenized, span_retokenized
