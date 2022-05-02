@@ -1,5 +1,6 @@
 import csv
 import json
+import logging
 import pickle
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -39,6 +40,8 @@ class PreparedDataset(Dataset, ABC):
         :param loss: the loss module to be used for this dataset.
         :param preprocessor: the preprocessor to be applied to the input data.
         """
+        self.LOGGER = logging.getLogger(__name__ + '.' + self.__class__.__name__)
+
         if metrics is not None:
             # only keep names of metrics
             self.metrics = {split_name: [m for m in split] for split_name, split in metrics.items()}
@@ -84,6 +87,8 @@ class MTLDataset(PreparedDataset):
         self.num_datasets = len(datasets)
 
         self._dataset_sizes = None
+
+        self.LOGGER.info(f'using datasets: {[x.name for x in self.datasets]}')
 
     def __getitem__(self, indices: Tuple[int, int]):
         """
@@ -418,6 +423,7 @@ class RegressionJSONDataset(JSONDataset):
         to_be_generated = list(map(to_absolute_path,
                                    [self.train_file, self.val_file, self.test_file]))
         if not all(map(path.exists, to_be_generated)):
+            self.LOGGER.info(f'generating dataset splits from: {raw_dataset}')
             with open(raw_dataset, 'r', encoding='utf8') as fp:
                 dataset = json.load(fp)
 
@@ -503,6 +509,7 @@ class ClassificationJSONDataset(JSONDataset):
         to_be_generated = list(map(to_absolute_path,
                                    [self.train_file, self.val_file, self.test_file]))
         if not all(map(path.exists, to_be_generated)):
+            self.LOGGER.info(f'generating dataset splits from: {raw_dataset}')
             with open(raw_dataset, 'r', encoding='utf8') as fp:
                 dataset = json.load(fp)
 
