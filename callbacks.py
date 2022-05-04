@@ -39,7 +39,10 @@ class TestPredictionWriter(Callback):
                     meta = outputs['meta'][ds_name]
                     batch_meta = batch[2][ds_name]
                     if len(preds.shape) == 2 and preds.shape[-1] == 2:
+                        preds = preds.softmax(-1)
                         preds = preds[:, 1]
+                    elif preds.shape[-1] == 1:
+                        preds = preds.sigmoid()
                     to_write = [batch_meta['indexes'], batch_meta['doc_ids'], preds, meta['y_rank']]
                 else:
                     to_write = [preds.argmax(-1), outputs['y_true'][ds_name]]
