@@ -349,6 +349,7 @@ class JSONDataset(PreparedDataset, ABC):
 
     def _split_dataset(self, dataset):
         assert len(dataset) >= self.num_test_samples + self.num_train_samples
+        # we use a hardcoded local random seed so that the dataset is always split the same way
         shuffle(dataset, Random(5823905).random)
         train_ds, val_ds = dataset[self.num_test_samples:], dataset[:self.num_test_samples]
         train_ds = train_ds[:self.num_train_samples]
@@ -530,6 +531,7 @@ class ClassificationJSONDataset(JSONDataset):
             train_ds, val_ds, test_ds = self._split_dataset(new_dataset)
             self._dump_splits(train_ds, val_ds, test_ds)
 
+            labels = sorted(list(labels))
             with open(self._label_file, 'wb') as fp:
                 pickle.dump({label: i for i, label in enumerate(labels)}, fp)
 
