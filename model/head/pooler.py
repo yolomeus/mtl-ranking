@@ -2,7 +2,7 @@ from abc import abstractmethod
 from typing import List
 
 import torch
-from torch.nn import Module, MultiheadAttention, Linear, Sequential, Softmax, PReLU
+from torch.nn import Module, MultiheadAttention, Linear, Sequential, Softmax, PReLU, ReLU
 
 
 class Pooler(Module):
@@ -94,6 +94,28 @@ class CLSToken(Pooler):
             x = layer_outputs[0]
 
         return x
+
+
+class SimpleAttention(Pooler):
+    def __init__(self, in_dim: int, out_dim: int, layers: List[int]):
+        super().__init__(in_dim, out_dim, layers)
+        assert len(layers) == 1
+        self.in_transform = Sequential(Linear(in_dim, out_dim),
+                                       ReLU())
+        self.attention_score = Linear(out_dim, 1)
+
+    def forward(self, inputs, meta=None):
+        x = [inputs[i] for i in self.layers][0]
+
+        x = self.in_transform(x)
+        a = self.attention_score(x).softmax(1)
+        x = x * a
+
+        if meta and 'spans' in meta:
+            x = self.collect_spans(x, meta['spans'])
+            return torch.stack([t.sum(0) for t in x])
+
+        return x.sum(1)
 
 
 class SelfAttention(Pooler):
