@@ -1,0 +1,47 @@
+defaults:
+  - preprocessor@msm_sem_sim.preprocessor: bert
+  - metrics@msm_sem_sim.metrics.train_metrics:
+      - accuracy
+      - f1score
+  - metrics@msm_sem_sim.metrics.val_metrics:
+      - accuracy
+      - f1score
+  - metrics@msm_sem_sim.metrics.test_metrics:
+      - accuracy
+      - f1score
+
+msm_sem_sim:
+  _target_: datamodule.dataset.RegressionJSONDataset
+
+  name: msm_sem_sim
+
+  raw_file: data/msm/sem_sim/msmarco_sem_sim_100000_10_2022_05_07-18-52-41.json
+
+  train_file: data/msm/sem_sim/train.jsonl
+  val_file: data/msm/sem_sim/validation.jsonl
+  test_file: data/msm/sem_sim/test.jsonl
+
+  num_train_samples: 949972
+  num_test_samples: 50000
+
+  # 1 means no buckets at all i.e. regression
+  num_buckets: 10
+
+  to_probabilities:
+    _target_: torch.nn.Softmax
+    dim: -1
+
+  loss:
+    _target_: torch.nn.CrossEntropyLoss
+
+  # ---------- overrides ----------
+  metrics:
+    train_metrics:
+      f1score:
+        num_classes: ${datamodule.dataset.datasets.msm_sem_sim.num_buckets}
+    val_metrics:
+      f1score:
+        num_classes: ${datamodule.dataset.datasets.msm_sem_sim.num_buckets}
+    test_metrics:
+      f1score:
+        num_classes: ${datamodule.dataset.datasets.msm_sem_sim.num_buckets}

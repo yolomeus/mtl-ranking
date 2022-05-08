@@ -1,5 +1,6 @@
 defaults:
   - body: bert_base_uncased
+  - heads@heads.msm_sem_sim: msm_sem_sim
   - heads@heads.msm_ner: msm_ner
   - heads@heads.msm_bm25: msm_bm25
   - heads@heads.trec2019: trec2019
