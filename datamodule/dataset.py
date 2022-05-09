@@ -348,7 +348,8 @@ class JSONDataset(PreparedDataset, ABC):
         return len(self.data)
 
     def _split_dataset(self, dataset):
-        assert len(dataset) >= self.num_test_samples + self.num_train_samples
+        assert len(dataset) >= self.num_test_samples + self.num_train_samples, f'{len(dataset)} does not match the ' \
+                                                                               f'specified dataset size'
         # we use a hardcoded local random seed so that the dataset is always split the same way
         shuffle(dataset, Random(5823905).random)
         train_ds, val_ds = dataset[self.num_test_samples:], dataset[:self.num_test_samples]
