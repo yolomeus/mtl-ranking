@@ -1,6 +1,8 @@
 import logging
 import os
 import pathlib
+from argparse import ArgumentParser
+from os.path import exists
 from typing import List, Tuple
 
 import torch
@@ -8,15 +10,22 @@ from beir import LoggingHandler, util
 from beir.datasets.data_loader import GenericDataLoader
 from beir.reranking import Rerank
 from beir.retrieval.evaluation import EvaluateRetrieval
-from beir.retrieval.models import SentenceBERT
-from beir.retrieval.search.dense import DenseRetrievalExactSearch
+from beir.retrieval.search.lexical import BM25Search
 from hydra.utils import instantiate
 from tqdm import tqdm
 from transformers import BertTokenizerFast
 
 
 class BeirMTLFromCheckpoint:
+    """Wrapper around mode.MultiTaskModel so it can be used for beir evaluation.
+    """
+
     def __init__(self, ckpt_path, device='cuda:0'):
+        """
+        :param ckpt_path: path to the pl checkpoint of a MultiTaskModel
+        :param device: the device to run inference on.
+        """
+
         self.device = device
         self.tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
         self.model = self.load_mtl_model(ckpt_path).to(self.device)
@@ -52,31 +61,88 @@ class BeirMTLFromCheckpoint:
         return model
 
 
-def main():
+def setup_logging():
     logging.basicConfig(format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S',
                         level=logging.INFO,
                         handlers=[LoggingHandler()])
 
-    dataset = "scifact"
-    url = "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{}.zip".format(dataset)
+
+def get_dataset(base_url, name):
+    url = base_url + f'{name}.zip'
     out_dir = os.path.join(pathlib.Path(__file__).parent.absolute(), "datasets")
-    data_path = util.download_and_unzip(url, out_dir)
+    data_path = os.path.join(out_dir, name)
+    if not exists(data_path):
+        util.download_and_unzip(url, out_dir)
 
     corpus, queries, qrels = GenericDataLoader(data_folder=data_path).load(split="test")
+    return corpus, queries, qrels
 
-    sent_bert = DenseRetrievalExactSearch(SentenceBERT("msmarco-distilbert-base-v3"), batch_size=16)
-    retriever = EvaluateRetrieval(sent_bert, score_function="dot")
+
+def get_bm25_results(corpus, queries, dataset_name, hostname, init_index):
+    retrieval_model = BM25Search(index_name=dataset_name,
+                                 hostname=hostname,
+                                 initialize=init_index)
+    retriever = EvaluateRetrieval(retrieval_model, score_function="dot")
     retrieve_results = retriever.retrieve(corpus, queries)
+    return retrieve_results
 
-    # re-ranking
-    model = BeirMTLFromCheckpoint('../data/model_checkpoints/mtl/baseline/lr=2e-6/09-11-15/'
-                                  'checkpoints/epoch-001-val_trec_map_trec2019-0.3443.ckpt')
-    reranker = Rerank(model, batch_size=16)
-    rerank_results = reranker.rerank(corpus, queries, retrieve_results, top_k=100)
 
-    EvaluateRetrieval.evaluate(qrels, rerank_results, retriever.k_values)
+def main(args):
+    setup_logging()
+
+    base_url = 'https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/'
+    ds_to_results = {}
+    for dataset_name in args.datasets:
+        corpus, queries, qrels = get_dataset(base_url,
+                                             dataset_name)
+
+        results = get_bm25_results(corpus, queries, dataset_name, args.es_hostname, args.skip_create_index)
+
+        # re-ranking
+        model = BeirMTLFromCheckpoint(args.model_ckpt)
+        reranker = Rerank(model, batch_size=args.batch_size)
+        rerank_results = reranker.rerank(corpus, queries, results, top_k=args.top_k)
+
+        results = EvaluateRetrieval.evaluate(qrels, rerank_results, args.cutoffs)
+        ds_to_results[dataset_name] = results
+
+    log_dir = f'logs/top_{args.top_k}/bs_{args.batch_size}/'
+    os.makedirs(log_dir, exist_ok=True)
+    with open(os.path.join(log_dir, args.model_name + '.csv'), 'w') as fp:
+        # create header
+        header = ['dataset']
+        for x in list(ds_to_results.values())[0]:
+            header.extend(x.keys())
+
+        fp.write(','.join(map(str, header)) + '\n')
+
+        # write metric for each ds
+        for ds_name in ds_to_results:
+            row = [ds_name]
+            for item in ds_to_results[ds_name]:
+                row.extend(item.values())
+
+            fp.write(','.join(map(str, row)) + '\n')
 
 
 if __name__ == '__main__':
-    main()
+    supported_datasets = ['trec-covid', 'nfcorpus', 'nq', 'hotpotqa', 'fiqa', 'arguana', 'webis-touche2020',
+                          'cqadupstack', 'quora', 'dbpedia-entity', 'scidocs', 'fever', 'climate-fever', 'scifact']
+
+    ap = ArgumentParser()
+
+    ap.add_argument('model_ckpt', type=str, help='path to model checkpoint')
+    ap.add_argument('model_name', type=str, help='model name used for output file.')
+    ap.add_argument('--batch_size', type=int, default=32, help='batch size for predicting relevance scores')
+    ap.add_argument('--cutoffs', nargs='+', default=[1, 10, 20, 50, 100],
+                    help='cutoff thresholds for ranking metrics.')
+    ap.add_argument('--top_k', type=int, default=100, help='re-rank the top k docs retrieved by bm25')
+    ap.add_argument('--datasets', nargs='+', default=supported_datasets,
+                    help='cutoff thresholds for ranking metrics.')
+    ap.add_argument('--skip_create_index', action='store_false',
+                    help='whether to create bm25 elastic search indices '
+                         'or use existing ones for all specified datasets.')
+    ap.add_argument('--es_hostname', type=str, default='localhost', help='hostname of the elastic search instance to '
+                                                                         'be used')
+    main(ap.parse_args())
