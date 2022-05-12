@@ -368,7 +368,15 @@ class JSONDataset(PreparedDataset, ABC):
 
     def _get_split(self, split: DatasetSplit):
         if split == DatasetSplit.TRAIN:
-            self.data = self._load_dataset(self.train_file)
+            data = self._load_dataset(self.train_file)
+
+            full_len = len(data)
+            assert self.num_train_samples <= full_len
+            if full_len > self.num_train_samples:
+                self.LOGGER.info(f'{self.name}: training on {self.num_train_samples}/{full_len} possible samples')
+
+            self.data = data[:self.num_train_samples]
+
         elif split == DatasetSplit.VALIDATION:
             self.data = self._load_dataset(self.val_file)
         elif split == DatasetSplit.TEST:
