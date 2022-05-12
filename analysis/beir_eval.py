@@ -127,8 +127,8 @@ def main(args):
 
 
 if __name__ == '__main__':
-    supported_datasets = ['trec-covid', 'nfcorpus', 'nq', 'hotpotqa', 'fiqa', 'arguana', 'webis-touche2020',
-                          'cqadupstack', 'quora', 'dbpedia-entity', 'scidocs', 'fever', 'climate-fever', 'scifact']
+    supported_datasets = ['trec-covid', 'nfcorpus', 'nq', 'hotpotqa', 'fiqa', 'arguana', 'webis-touche2020', 'quora',
+                          'dbpedia-entity', 'scidocs', 'fever', 'climate-fever', 'scifact']
 
     ap = ArgumentParser()
 
