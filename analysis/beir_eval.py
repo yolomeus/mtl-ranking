@@ -3,13 +3,15 @@ import os
 import pathlib
 from argparse import ArgumentParser
 from os.path import exists
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
+import numpy as np
 import torch
 from beir import LoggingHandler, util
 from beir.datasets.data_loader import GenericDataLoader
 from beir.reranking import Rerank
 from beir.retrieval.evaluation import EvaluateRetrieval
+from beir.retrieval.search.dense import DenseRetrievalExactSearch
 from beir.retrieval.search.lexical import BM25Search
 from hydra.utils import instantiate
 from tqdm import tqdm
@@ -20,30 +22,17 @@ class BeirMTLFromCheckpoint:
     """Wrapper around mode.MultiTaskModel so it can be used for beir evaluation.
     """
 
-    def __init__(self, ckpt_path, device='cuda:0'):
+    def __init__(self, ckpt_path, device='cuda:0', output_name='trec2019'):
         """
         :param ckpt_path: path to the pl checkpoint of a MultiTaskModel
         :param device: the device to run inference on.
         """
 
         self.device = device
+        self.output_name = output_name
+
         self.tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
         self.model = self.load_mtl_model(ckpt_path).to(self.device)
-
-    def predict(self, sentences: List[Tuple[str, str]], batch_size: int) -> List[float]:
-
-        scores = []
-        for i in tqdm(range(0, len(sentences), batch_size), total=len(sentences) // batch_size):
-            batch = sentences[i:i + batch_size]
-            queries, docs = zip(*batch)
-            x = self.tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
-            with torch.no_grad():
-                preds = self.model({'trec2019': x.to(self.device)}, meta={'trec2019': None})['trec2019']
-                scores.append(preds)
-
-        scores = torch.cat(scores, 0)
-        scores = scores.softmax(1)[:, -1]
-        return scores.cpu().numpy()
 
     @staticmethod
     def load_mtl_model(ckpt_path):
@@ -59,6 +48,52 @@ class BeirMTLFromCheckpoint:
 
         model.load_state_dict(new_state_dict)
         return model
+
+
+class BeirMTLRerank(BeirMTLFromCheckpoint):
+
+    def predict(self, sentences: List[Tuple[str, str]], batch_size: int) -> List[float]:
+        scores = []
+        for i in tqdm(range(0, len(sentences), batch_size), total=len(sentences) // batch_size):
+            batch = sentences[i:i + batch_size]
+            queries, docs = zip(*batch)
+            x = self.tokenizer(queries, docs, padding=True, truncation=True, return_tensors='pt')
+            with torch.no_grad():
+                preds = self.model({self.output_name: x.to(self.device)},
+                                   meta={self.output_name: None})[self.output_name]
+                scores.append(preds)
+
+        scores = torch.cat(scores, 0)
+        scores = scores.softmax(1)[:, -1]
+        return scores.cpu().numpy()
+
+
+class BeirMTLDense(BeirMTLFromCheckpoint):
+
+    def __init__(self, ckpt_path, layer_to_use):
+        super().__init__(ckpt_path)
+        self.layer_to_use = layer_to_use
+
+    def encode_queries(self, queries: List[str], batch_size: int, **kwargs) -> np.ndarray:
+        return self.encode_texts(queries, batch_size)
+
+    # Write your own encoding corpus function (Returns: Document embeddings as numpy array)
+    def encode_corpus(self, corpus: List[Dict[str, str]], batch_size: int, **kwargs) -> np.ndarray:
+        corpus = [(x['title'] + self.tokenizer.sep_token + x['text']) for x in corpus]
+        return self.encode_texts(corpus, batch_size)
+
+    def encode_texts(self, texts, batch_size):
+        texts = [x.strip() for x in texts]
+        encoded = []
+        for i in tqdm(range(0, len(texts), batch_size), total=len(texts) // batch_size):
+            batch = texts[i:i + batch_size]
+            x = self.tokenizer(batch, padding=True, truncation=True, return_tensors='pt')
+            with torch.no_grad():
+                embeds = self.model.body(x.to(self.device))[self.layer_to_use]
+                encoded.append(embeds.mean(1))
+
+        encoded = torch.cat(encoded, dim=0).cpu().numpy()
+        return encoded
 
 
 def setup_logging():
@@ -88,6 +123,27 @@ def get_bm25_results(corpus, queries, dataset_name, hostname, init_index):
     return retrieve_results
 
 
+def evaluate_reranking(model_ckpt, batch_size, cutoffs, top_k, qrels, corpus, queries, dataset_name, es_hostname,
+                       skip_create_index):
+    results = get_bm25_results(corpus, queries, dataset_name, es_hostname, skip_create_index)
+
+    # re-ranking
+    model = BeirMTLRerank(model_ckpt)
+    reranker = Rerank(model, batch_size=batch_size)
+    rerank_results = reranker.rerank(corpus, queries, results, top_k=top_k)
+
+    results = EvaluateRetrieval.evaluate(qrels, rerank_results, cutoffs)
+    return results
+
+
+def evaluate_dense(model_ckpt, batch_size, cutoffs, qrels, corpus, queries, layer_to_use):
+    model = DenseRetrievalExactSearch(BeirMTLDense(model_ckpt, layer_to_use), batch_size=batch_size)
+    retriever = EvaluateRetrieval(model, score_function='cos_sim')
+    retrieved = retriever.retrieve(corpus, queries)
+    results = retriever.evaluate(qrels, retrieved, cutoffs)
+    return results
+
+
 def main(args):
     setup_logging()
 
@@ -97,14 +153,16 @@ def main(args):
         corpus, queries, qrels = get_dataset(base_url,
                                              dataset_name)
 
-        results = get_bm25_results(corpus, queries, dataset_name, args.es_hostname, args.skip_create_index)
+        if args.retrieval_type == 'rerank':
+            results = evaluate_reranking(args.model_ckpt, args.batch_size, args.cutoffs, args.top_k, qrels, corpus,
+                                         queries,
+                                         dataset_name, args.es_hostname, args.skip_create_index)
+        elif args.retrieval_type == 'dense':
+            results = evaluate_dense(args.model_ckpt, args.batch_size, args.cutoffs, qrels, corpus, queries,
+                                     args.layer_to_use)
+        else:
+            raise NotImplementedError
 
-        # re-ranking
-        model = BeirMTLFromCheckpoint(args.model_ckpt)
-        reranker = Rerank(model, batch_size=args.batch_size)
-        rerank_results = reranker.rerank(corpus, queries, results, top_k=args.top_k)
-
-        results = EvaluateRetrieval.evaluate(qrels, rerank_results, args.cutoffs)
         ds_to_results[dataset_name] = results
 
     log_dir = f'logs/top_{args.top_k}/bs_{args.batch_size}/'
@@ -134,6 +192,10 @@ if __name__ == '__main__':
 
     ap.add_argument('model_ckpt', type=str, help='path to model checkpoint')
     ap.add_argument('model_name', type=str, help='model name used for output file.')
+    ap.add_argument('--retrieval_type', type=str, default='rerank', choices=['dense', 'rerank'])
+    ap.add_argument('--layer_to_use', type=int, default=12, help='which BERT layer to get embeddings from. Only '
+                                                                 'applies to dense retrieval')
+
     ap.add_argument('--batch_size', type=int, default=32, help='batch size for predicting relevance scores')
     ap.add_argument('--cutoffs', nargs='+', default=[1, 10, 20, 50, 100],
                     help='cutoff thresholds for ranking metrics.')
