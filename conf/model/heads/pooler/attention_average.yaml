@@ -1,0 +1,4 @@
+_target_: model.head.pooler.AttentionAverage
+in_dim: ${model.body.out_dim}
+out_dim: ${model.body.out_dim}
+layers: ???

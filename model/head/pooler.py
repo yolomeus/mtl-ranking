@@ -74,6 +74,36 @@ class Average(Pooler):
         return x
 
 
+class AttentionAverage(Pooler):
+    """Average along sequence dim, use attention weights across layers.
+    """
+
+    def __init__(self, in_dim: int, out_dim: int, layers: List[int]):
+        super().__init__(in_dim, out_dim, layers)
+        assert len(layers) > 1
+        self.attention = Sequential(Linear(in_dim, in_dim),
+                                    ReLU(),
+                                    Linear(in_dim, 1))
+
+    def forward(self, inputs, meta=None):
+        layer_outputs = [inputs[i] for i in self.layers]
+
+        if meta and 'spans' in meta:
+            layer_spans = [self.collect_spans(layer_out, meta['spans'])
+                           for layer_out in layer_outputs]
+            layer_embeds = [[x.mean(0) for x in layer] for layer in layer_spans]
+            # stack along batch dim
+            layer_embeds = [torch.stack(layer) for layer in layer_embeds]
+        else:
+            layer_embeds = [x.mean(1) for x in layer_outputs]
+
+        att_scores = torch.stack([self.attention(x) for x in layer_embeds]).softmax(0)
+        layer_embeds = torch.stack(layer_embeds)
+        x = (att_scores * layer_embeds).sum(0)
+
+        return x
+
+
 class CLSToken(Pooler):
     """Only get the CLS Token output which is expected to be the first token in the sequence. When pooling multiple
     layers, the average of CLS token outputs will be returned.
