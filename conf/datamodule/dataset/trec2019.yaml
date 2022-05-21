@@ -39,6 +39,9 @@ trec2019:
   qrels_file_test: data/trec/trec_eval_files/2019qrels-pass.txt
   qrels_file_val: data/trec/trec_eval_files/2019-qrels-pass.dev.tsv
 
+  # null means using the full dataset
+  num_train_samples: null
+
   to_probabilities:
     _target_: torch.nn.Softmax
     dim: -1

@@ -136,7 +136,8 @@ class TREC2019(PreparedDataset):
                  metrics: Dict[str, ModuleDict],
                  to_probabilities: Module,
                  loss: Module,
-                 preprocessor: Preprocessor):
+                 preprocessor: Preprocessor,
+                 num_train_samples):
 
         super().__init__(name, metrics, to_probabilities, loss, preprocessor)
         self.name = name
@@ -156,7 +157,16 @@ class TREC2019(PreparedDataset):
         self.current_file = None
         self.split = None
 
+        # instead of just limiting to the first k samples of the ds, we sample indices uniformly
+        # this prevents sampling bias, as the full ds is not shuffled beforehand
+        self.num_train_samples = num_train_samples
+        if self.use_index_map:
+            self.idx_map = self._get_index_map()
+
     def __getitem__(self, index):
+        if self.use_index_map:
+            index = self.idx_map[index]
+
         with h5py.File(self.current_file, 'r') as fp:
             q_id, doc_id, og_q_id, og_doc_id = self.get_ids(fp, index)
             label, label_rank = self.get_label(fp, index, og_q_id, og_doc_id)
@@ -170,6 +180,9 @@ class TREC2019(PreparedDataset):
         return x
 
     def __len__(self):
+        if self.split == DatasetSplit.TRAIN and self.num_train_samples is not None:
+            return self.num_train_samples
+
         with h5py.File(self.current_file, "r") as fp:
             return len(fp['q_ids'])
 
@@ -265,6 +278,24 @@ class TREC2019(PreparedDataset):
             x['meta']['y_rank'] = y_rank
 
         return x
+
+    def _get_index_map(self):
+        """returns a dict that randomly maps each index in [0, self.num_train_samples] to an index in
+        [0, num_all_train_samples].
+        """
+
+        with h5py.File(self._train_file, "r") as fp:
+            num_all_train_samples = len(fp['q_ids'])
+
+        assert self.num_train_samples <= num_all_train_samples
+
+        all_train_idxs = range(num_all_train_samples)
+        return dict(zip(range(self.num_train_samples),
+                        Random(5823905).sample(all_train_idxs, self.num_train_samples)))
+
+    @property
+    def use_index_map(self):
+        return self.num_train_samples is not None and self.split == DatasetSplit.TRAIN
 
 
 class TREC2019Pairwise(TREC2019):
