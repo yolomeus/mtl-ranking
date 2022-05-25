@@ -165,7 +165,7 @@ def main(args):
 
         ds_to_results[dataset_name] = results
 
-    log_dir = f'logs/top_{args.top_k}/bs_{args.batch_size}/'
+    log_dir = f'logs/{args.retrieval_type}/top_{args.top_k}/bs_{args.batch_size}/'
     os.makedirs(log_dir, exist_ok=True)
     with open(os.path.join(log_dir, args.model_name + '.csv'), 'w') as fp:
         # create header
