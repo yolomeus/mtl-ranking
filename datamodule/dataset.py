@@ -286,7 +286,7 @@ class TREC2019(PreparedDataset):
         with h5py.File(self._train_file, "r") as fp:
             num_all_train_samples = len(fp['q_ids'])
 
-        assert self.num_train_samples <= num_all_train_samples
+        assert self.num_train_samples is None or self.num_train_samples <= num_all_train_samples
 
         all_train_idxs = range(num_all_train_samples)
         return dict(zip(range(self.num_train_samples),
