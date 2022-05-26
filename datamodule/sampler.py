@@ -1,11 +1,17 @@
-from random import shuffle
+import pickle
+from os import makedirs
+from os.path import exists
+from random import shuffle, Random
 from typing import Iterator
 
+import h5py
 import torch
+from hydra.utils import to_absolute_path
 from torch.utils.data import Sampler
 from torch.utils.data.sampler import T_co
+from tqdm import tqdm
 
-from datamodule.dataset import MTLDataset
+from datamodule.dataset import MTLDataset, TREC2019, JSONDataset
 
 
 class RoundRobin(Sampler):
@@ -96,3 +102,61 @@ class RandomProportional(Sampler):
 
     def __len__(self):
         return len(self.indexes)
+
+
+class LimitedData(Sampler):
+
+    def __init__(self, limit_to: int, data_source: MTLDataset):
+        super().__init__(data_source)
+
+        self.cache_file = to_absolute_path('.cache/pair_cache.pkl')
+        makedirs(to_absolute_path('.cache'), exist_ok=True)
+
+        self.limit_to = limit_to
+
+        if not exists(self.cache_file):
+            ds_to_idx = data_source.name_to_idx
+            trec_ds: TREC2019 = data_source.datasets[ds_to_idx['trec2019']]
+
+            trec_sample_ids = range(len(trec_ds))
+            trec_qid_pid_pairs = self._get_trec_qid_pid_idx(trec_ds, trec_sample_ids)
+
+            self.pairs_to_idx = {ds.name: self._get_json_qid_pid_idx(ds)
+                                 for ds in data_source.datasets
+                                 if ds.name != 'trec2019'}
+
+            joint_ds_pairs = set.intersection(*map(lambda x: set(x.keys()), self.pairs_to_idx.values()))
+            valid_pairs = joint_ds_pairs.intersection(trec_qid_pid_pairs)
+
+            final_indices = []
+            for pair in valid_pairs:
+                for ds_name, pair_to_idx in self.pairs_to_idx.items():
+                    final_indices.append((data_source.name_to_idx[ds_name], pair_to_idx[pair]))
+
+            with open(self.cache_file, 'wb') as fp:
+                pickle.dump(final_indices, fp)
+
+        with open(self.cache_file, 'rb') as fp:
+            final_indices = pickle.load(fp)
+
+        assert len(final_indices) >= limit_to, f'there are only {len(final_indices)} pairs to sample from.'
+        self.final_indices = Random(52317565).sample(final_indices, limit_to)
+
+    def __iter__(self):
+        return iter(self.final_indices)
+
+    def __len__(self):
+        return len(self.final_indices)
+
+    def _get_trec_qid_pid_idx(self, trec_ds, sample_ids):
+        with h5py.File(trec_ds.current_file, 'r') as fp:
+            qid_pid_idx = {}
+            for idx in tqdm(sample_ids, total=len(sample_ids)):
+                _, _, q_id, doc_id = trec_ds.get_ids(fp, idx)
+                qid_pid_idx[(int(q_id), int(doc_id))] = idx
+
+        return qid_pid_idx
+
+    def _get_json_qid_pid_idx(self, dataset: JSONDataset):
+        qid_pid_to_idx = {(x['info']['qid'], x['info']['pid']): i for i, x in enumerate(dataset.data)}
+        return qid_pid_to_idx
