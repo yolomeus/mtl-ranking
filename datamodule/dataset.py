@@ -160,7 +160,8 @@ class TREC2019(PreparedDataset):
         # instead of just limiting to the first k samples of the ds, we sample indices uniformly
         # this prevents sampling bias, as the full ds is not shuffled beforehand
         self.num_train_samples = num_train_samples
-        self.idx_map = self._get_index_map()
+        if num_train_samples is not None:
+            self.idx_map = self._get_index_map()
 
     def __getitem__(self, index):
         if self.use_index_map():
@@ -286,7 +287,7 @@ class TREC2019(PreparedDataset):
         with h5py.File(self._train_file, "r") as fp:
             num_all_train_samples = len(fp['q_ids'])
 
-        assert self.num_train_samples is None or self.num_train_samples <= num_all_train_samples
+        assert self.num_train_samples <= num_all_train_samples
 
         all_train_idxs = range(num_all_train_samples)
         return dict(zip(range(self.num_train_samples),
