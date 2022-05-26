@@ -561,6 +561,7 @@ class ClassificationJSONDataset(JSONDataset):
 
                     x_new = {'x': (x['input']['query'], x['input']['passage']),
                              'y': target['label'],
+                             'info': x['info'],
                              'span1': target['span1']}
                     if 'span2' in target:
                         x_new['span2'] = target['span2']
