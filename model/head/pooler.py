@@ -38,9 +38,18 @@ class Pooler(Module):
         :param spans:
         :return: a list of vector sequences, with each sequence corresponding to a span from spans.
         """
-        # TODO support multiple spans
         a, b = spans[:, 0], spans[:, 1]
         return [x[i, a[i]:b[i]] for i in torch.arange(0, spans.shape[0])]
+
+    def collect_span_pairs(self, spans, x):
+        spans1, spans2 = spans[0], spans[1]
+        x1 = self.collect_spans(x, spans1)
+        x2 = self.collect_spans(x, spans2)
+
+        x1 = torch.stack([t.mean(0) for t in x1])
+        x2 = torch.stack([t.mean(0) for t in x2])
+
+        return x1, x2
 
 
 class Average(Pooler):
@@ -50,7 +59,6 @@ class Average(Pooler):
 
     def __init__(self, in_dim: int, out_dim: int, layers: List[int]):
         super().__init__(in_dim, out_dim, layers)
-        assert in_dim == out_dim or out_dim is None, 'the average pooler will have the same input dim as output dim'
         self._pool_layers = False
         if len(self.layers) > 1:
             self._pool_layers = True
@@ -68,6 +76,12 @@ class Average(Pooler):
             x = layer_outputs[0]
 
         if meta and 'spans' in meta:
+            spans = meta['spans']
+            if len(spans.shape) == 3:
+                spans1, spans2 = self.collect_span_pairs(spans, x)
+                x = torch.cat([spans1, spans2], dim=-1)
+                return x
+
             x = self.collect_spans(x, meta['spans'])
 
         x = torch.stack([t.mean(0) for t in x])

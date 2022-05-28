@@ -46,15 +46,25 @@ class BERTRetokenization(BERT):
     def preprocess(self, batch):
 
         queries, passages = zip(*[(x['x']) for x in batch])
-        spans = []
+        tokenized = self.bert_tokenizer(queries, passages, padding=True, truncation=True, return_tensors='pt')
+
+        spans1 = []
+        spans2 = []
         for x in batch:
             if 'span2' in x:
-                spans.append([x['span1'], x['span2']])
+                spans1.append(x['span1'])
+                spans2.append(x['span2'])
             else:
-                spans.append(x['span1'])
+                spans1.append(x['span1'])
 
-        new_spans = list(map(lambda x: self._retokenize_span(*x), zip(queries, passages, spans)))
-        tokenized = self.bert_tokenizer(queries, passages, padding=True, truncation=True, return_tensors='pt')
+        if len(spans1) > 0:
+            assert len(spans1) == len(spans2)
+            new_spans1, new_spans2 = [list(map(lambda x: self._retokenize_span(*x), zip(queries, passages, x)))
+                                      for x in [spans1, spans2]]
+
+            return tokenized, (new_spans1, new_spans2)
+
+        new_spans = list(map(lambda x: self._retokenize_span(*x), zip(queries, passages, spans1)))
 
         return tokenized, new_spans
 
