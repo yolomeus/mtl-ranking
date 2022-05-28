@@ -31,6 +31,7 @@ def train(cfg: DictConfig):
     # we need to pass the dataset object to the sampler constructors
     datamodule = instantiate(cfg.datamodule,
                              _recursive_=False)
+    datamodule.prepare_data()
     datamodule.setup()
 
     model = instantiate(cfg.model)
