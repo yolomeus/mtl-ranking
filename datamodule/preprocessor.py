@@ -90,7 +90,7 @@ class BERTRetokenization(BERT):
         if len(span_retokenized) == 0:
             span_retokenized = [self.bert_tokenizer.unk_token_id]
 
-        sep_pos = len(self.bert_tokenizer(query, add_special_tokens=False))
+        sep_pos = len(self.bert_tokenizer(query, add_special_tokens=False)['input_ids'])
 
         a, b = left_retokenized, span_retokenized
         # shift by 1 for [cls]
