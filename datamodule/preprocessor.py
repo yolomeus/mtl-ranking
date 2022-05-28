@@ -39,9 +39,10 @@ class BERTRetokenization(BERT):
     and the meta are recomputed accordingly.
     """
 
-    def __init__(self, use_fast_tokenizer):
+    def __init__(self, use_fast_tokenizer, spacy_version, force_spacy_dl):
         super().__init__(use_fast_tokenizer)
-        self.spacy_tokenizer = self._get_spacy_tokenizer()
+        self.force_spacy_dl = force_spacy_dl
+        self.spacy_tokenizer = self._get_spacy_tokenizer(spacy_version)
 
     def preprocess(self, batch):
 
@@ -59,8 +60,8 @@ class BERTRetokenization(BERT):
 
         if len(spans1) > 0:
             assert len(spans1) == len(spans2)
-            new_spans1, new_spans2 = [list(map(lambda x: self._retokenize_span(*x), zip(queries, passages, x)))
-                                      for x in [spans1, spans2]]
+            new_spans1, new_spans2 = [list(map(lambda x: self._retokenize_span(*x), zip(queries, passages, s)))
+                                      for s in [spans1, spans2]]
 
             return tokenized, (new_spans1, new_spans2)
 
@@ -100,10 +101,9 @@ class BERTRetokenization(BERT):
 
         return new_span
 
-    @staticmethod
-    def _get_spacy_tokenizer():
-        if not spacy.util.is_package('en_core_web_sm'):
-            spacy.cli.download('en_core_web_sm-3.2.0', direct=True)
+    def _get_spacy_tokenizer(self, version):
+        if not spacy.util.is_package('en_core_web_sm') or self.force_spacy_dl:
+            spacy.cli.download('en_core_web_sm-' + version, direct=True)
 
         import en_core_web_sm
         return en_core_web_sm.load().tokenizer
