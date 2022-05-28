@@ -30,7 +30,7 @@ msm_ner:
   num_classes: 18
 
   to_probabilities:
-    _target_: torch.nn.Identity
+    _target_: torch.nn.Softmax
 
   loss:
     _target_: torch.nn.CrossEntropyLoss

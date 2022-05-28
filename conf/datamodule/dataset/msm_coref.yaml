@@ -1,0 +1,48 @@
+defaults:
+  - preprocessor@msm_coref.preprocessor: bert_retokenization
+  - metrics@msm_coref.metrics.train_metrics:
+      - accuracy
+      - f1score
+  - metrics@msm_coref.metrics.val_metrics:
+      - accuracy
+      - f1score
+  - metrics@msm_coref.metrics.test_metrics:
+      - accuracy
+      - f1score
+
+
+msm_coref:
+  _target_: datamodule.dataset.ClassificationJSONDataset
+
+  name: msm_coref
+
+  raw_file: data/msm/coref/msmarco_coref_res_1000000_30_2022_05_16-13-46-34.json
+
+  train_file: data/msm/coref/train.json
+  val_file: data/msm/coref/validation.json
+  test_file: data/msm/coref/test.json
+
+  label_file: data/msm/coref/labels.pkl
+
+  num_train_samples: 950000
+  num_test_samples: 50011
+
+  num_classes: 2
+
+  to_probabilities:
+    _target_: torch.nn.Softmax
+
+  loss:
+    _target_: torch.nn.CrossEntropyLoss
+
+
+  metrics:
+    train_metrics:
+      f1score:
+        num_classes: 2
+    val_metrics:
+      f1score:
+        num_classes: 2
+    test_metrics:
+      f1score:
+        num_classes: 2
