@@ -58,7 +58,7 @@ class BERTRetokenization(BERT):
             else:
                 spans1.append(x['span1'])
 
-        if len(spans1) > 0:
+        if len(spans2) > 0:
             assert len(spans1) == len(spans2)
             new_spans1, new_spans2 = [list(map(lambda x: self._retokenize_span(*x), zip(queries, passages, s)))
                                       for s in [spans1, spans2]]
