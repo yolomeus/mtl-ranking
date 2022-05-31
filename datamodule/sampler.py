@@ -114,30 +114,29 @@ class LimitedData(Sampler):
 
         self.limit_to = limit_to
 
+        ds_to_idx = data_source.name_to_idx
+        trec_ds: TREC2019 = data_source.datasets[ds_to_idx['trec2019']]
+
+        trec_sample_ids = range(len(trec_ds))
         if not exists(self.cache_file):
-            ds_to_idx = data_source.name_to_idx
-            trec_ds: TREC2019 = data_source.datasets[ds_to_idx['trec2019']]
-
-            trec_sample_ids = range(len(trec_ds))
             trec_qid_pid_pairs = self._get_trec_qid_pid_idx(trec_ds, trec_sample_ids)
-
-            self.pairs_to_idx = {ds.name: self._get_json_qid_pid_idx(ds)
-                                 for ds in data_source.datasets
-                                 if ds.name != 'trec2019'}
-
-            joint_ds_pairs = set.intersection(*map(lambda x: set(x.keys()), self.pairs_to_idx.values()))
-            valid_pairs = joint_ds_pairs.intersection(trec_qid_pid_pairs)
-
-            final_indices = []
-            for pair in valid_pairs:
-                for ds_name, pair_to_idx in self.pairs_to_idx.items():
-                    final_indices.append((data_source.name_to_idx[ds_name], pair_to_idx[pair]))
-
             with open(self.cache_file, 'wb') as fp:
-                pickle.dump(final_indices, fp)
+                pickle.dump(trec_qid_pid_pairs, fp)
+        else:
+            with open(self.cache_file, 'rb') as fp:
+                trec_qid_pid_pairs = pickle.load(fp)
 
-        with open(self.cache_file, 'rb') as fp:
-            final_indices = pickle.load(fp)
+        self.pairs_to_idx = {ds.name: self._get_json_qid_pid_idx(ds)
+                             for ds in data_source.datasets
+                             if ds.name != 'trec2019'}
+
+        joint_ds_pairs = set.intersection(*map(lambda x: set(x.keys()), self.pairs_to_idx.values()))
+        valid_pairs = joint_ds_pairs.intersection(trec_qid_pid_pairs)
+
+        final_indices = []
+        for pair in valid_pairs:
+            for ds_name, pair_to_idx in self.pairs_to_idx.items():
+                final_indices.append((data_source.name_to_idx[ds_name], pair_to_idx[pair]))
 
         assert len(final_indices) >= limit_to, f'there are only {len(final_indices)} pairs to sample from.'
         self.final_indices = Random(52317565).sample(final_indices, limit_to)
