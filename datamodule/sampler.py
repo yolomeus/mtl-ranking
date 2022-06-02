@@ -1,4 +1,6 @@
 import pickle
+from collections import defaultdict
+from logging import getLogger
 from os import makedirs
 from os.path import exists
 from random import shuffle, Random
@@ -109,45 +111,52 @@ class LimitedData(Sampler):
     def __init__(self, limit_to: int, data_source: MTLDataset):
         super().__init__(data_source)
 
+        self.LOGGER = getLogger(__name__ + '.' + self.__class__.__name__)
+
         self.cache_file = to_absolute_path('.cache/pair_cache.pkl')
         makedirs(to_absolute_path('.cache'), exist_ok=True)
 
         self.limit_to = limit_to
 
-        ds_to_idx = data_source.name_to_idx
-        trec_ds: TREC2019 = data_source.datasets[ds_to_idx['trec2019']]
+        self.name_pair_idx = self._get_name_pair_idx(data_source)
 
-        trec_sample_ids = range(len(trec_ds))
-        if not exists(self.cache_file):
-            trec_qid_pid_pairs = self._get_trec_qid_pid_idx(trec_ds, trec_sample_ids)
-            with open(self.cache_file, 'wb') as fp:
-                pickle.dump(trec_qid_pid_pairs, fp)
-        else:
-            with open(self.cache_file, 'rb') as fp:
-                trec_qid_pid_pairs = pickle.load(fp)
+        # we want to use the same samples regardless of the global random seed,
+        # so we can still change it without affecting the samples we're operating on
+        sampled_pairs = Random(52317565).sample(set(self.name_pair_idx['trec2019'].keys()), limit_to)
 
-        self.pairs_to_idx = {ds.name: self._get_json_qid_pid_idx(ds)
-                             for ds in data_source.datasets
-                             if ds.name != 'trec2019'}
+        ds_to_skipped = defaultdict(int)
+        self.final_indices = []
+        for ds_name, pair_to_idx in self.name_pair_idx.items():
+            ds_idx = data_source.name_to_idx[ds_name]
+            for pair in sampled_pairs:
+                try:
+                    self.final_indices.append((ds_idx, pair_to_idx[pair]))
+                except KeyError:
+                    ds_to_skipped[ds_name] += 1
 
-        joint_ds_pairs = set.intersection(*map(lambda x: set(x.keys()), self.pairs_to_idx.values()))
-        valid_pairs = joint_ds_pairs.intersection(trec_qid_pid_pairs)
-
-        final_indices = []
-        for pair in valid_pairs:
-            for ds_name, pair_to_idx in self.pairs_to_idx.items():
-                final_indices.append((data_source.name_to_idx[ds_name], pair_to_idx[pair]))
-
-        assert len(final_indices) >= limit_to, f'there are only {len(final_indices)} pairs to sample from.'
-        self.final_indices = Random(52317565).sample(final_indices, limit_to)
+        self.LOGGER.info(f'total num samples: {len(self.final_indices)}')
 
     def __iter__(self):
+        shuffle(self.final_indices)
         return iter(self.final_indices)
 
     def __len__(self):
         return len(self.final_indices)
 
-    def _get_trec_qid_pid_idx(self, trec_ds, sample_ids):
+    def _get_name_pair_idx(self, datasource):
+        datasets = datasource.datasets
+        ds_name_to_idx = datasource.name_to_idx
+
+        pairs_to_idx = {ds.name: self._get_json_qid_pid_idx(ds)
+                        for ds in datasets
+                        if ds.name != 'trec2019'}
+
+        trec_ds: TREC2019 = datasets[ds_name_to_idx['trec2019']]
+        pairs_to_idx['trec2019'] = self._get_trec_qid_pid_idx(trec_ds)
+
+        return pairs_to_idx
+
+    def _build_trec_qid_pid_idx(self, trec_ds, sample_ids):
         with h5py.File(trec_ds.current_file, 'r') as fp:
             qid_pid_idx = {}
             for idx in tqdm(sample_ids, total=len(sample_ids)):
@@ -156,6 +165,21 @@ class LimitedData(Sampler):
 
         return qid_pid_idx
 
+    def _get_trec_qid_pid_idx(self, trec_ds):
+        trec_size = range(len(trec_ds))
+        # build if not exists
+        if not exists(self.cache_file):
+            trec_qid_pid_idx = self._build_trec_qid_pid_idx(trec_ds, trec_size)
+            with open(self.cache_file, 'wb') as fp:
+                pickle.dump(trec_qid_pid_idx, fp)
+        # read from cache
+        else:
+            with open(self.cache_file, 'rb') as fp:
+                trec_qid_pid_idx = pickle.load(fp)
+
+        return trec_qid_pid_idx
+
     def _get_json_qid_pid_idx(self, dataset: JSONDataset):
-        qid_pid_to_idx = {(x['info']['qid'], x['info']['pid']): i for i, x in enumerate(dataset.data)}
+        qid_pid_to_idx = {(int(x['info']['qid']), int(x['info']['pid'])): i
+                          for i, x in enumerate(dataset.data)}
         return qid_pid_to_idx
