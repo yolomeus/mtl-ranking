@@ -9,7 +9,6 @@ random_seed: 1590258941
 
 training:
   epochs: 100
-  validate_every_n_steps: null
   warmup_steps: 10000
   batch_size: 32
   accumulate_batches: 1

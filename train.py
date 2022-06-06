@@ -11,28 +11,11 @@ from pytorch_lightning.loggers import WandbLogger
 from callbacks import TestPredictionWriter
 
 
-def get_validation_inverval_args(num_steps, ds_len):
-    # TODO this functionality will be available in a future PL release
-    if num_steps is None or num_steps == ds_len:
-        return {'check_val_every_n_epoch': 1}
-    elif num_steps < ds_len:
-        return {'val_check_interval': num_steps}
-
-    return {'check_val_every_n_epoch': num_steps // ds_len}
-
-
 @hydra.main(config_path='conf', config_name='config')
 def train(cfg: DictConfig):
     """Train a pytorch model specified by the config file"""
 
     seed_everything(cfg.random_seed, workers=True)
-
-    # do not instantiate datamodule recursively,
-    # we need to pass the dataset object to the sampler constructors
-    datamodule = instantiate(cfg.datamodule,
-                             _recursive_=False)
-    datamodule.prepare_data()
-    datamodule.setup()
 
     model = instantiate(cfg.model)
     training_loop = instantiate(cfg.loop,
@@ -73,9 +56,12 @@ def train(cfg: DictConfig):
                       callbacks=[model_checkpoint, early_stopping, LearningRateMonitor(),
                                  TestPredictionWriter(preds_dir)],
                       accumulate_grad_batches=train_cfg.accumulate_batches,
-                      precision=train_cfg.precision,
-                      **get_validation_inverval_args(train_cfg.validate_every_n_steps,
-                                                     len(datamodule.train_dataloader())))
+                      precision=train_cfg.precision)
+
+    # do not instantiate datamodule recursively,
+    # we need to pass the dataset object to the sampler constructors
+    datamodule = instantiate(cfg.datamodule,
+                             _recursive_=False)
 
     trainer.fit(training_loop, datamodule=datamodule)
 
