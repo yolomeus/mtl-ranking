@@ -4,15 +4,15 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.9
-  - pip=22.0.4
+  - python=3.7
+  - pip=22.1.2
   - pytorch=1.11.0
   - cudatoolkit=11.3
   - pytorch-lightning=1.6.0
   - transformers=4.15.0
   - h5py=3.3.0
   - hdf5=1.10.6
-  - spacy=3.2.4
+  - spacy=2.1.8
   - scikit-learn=1.0.2
   - pip:
       - hydra-core==1.1.0
