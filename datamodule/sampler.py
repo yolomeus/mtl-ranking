@@ -160,7 +160,7 @@ class LimitedDataFromTrec(Sampler):
         final_samples.extend(self.name_to_samples['trec2019'])
         non_trec_samples = random.sample(self.non_trec_samples, self.num_non_trec)
         final_samples.extend(non_trec_samples)
-
+        shuffle(final_samples)
         return iter(final_samples)
 
     def __len__(self):
