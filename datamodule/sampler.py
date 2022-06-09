@@ -1,4 +1,5 @@
 import pickle
+import random
 from collections import defaultdict
 from logging import getLogger
 from os import makedirs
@@ -99,6 +100,7 @@ class RandomProportional(Sampler):
         shuffle(self.indexes)
 
     def __iter__(self) -> Iterator[T_co]:
+        shuffle(self.indexes)
         for ds_idx, sample_idx in self.indexes:
             yield ds_idx, sample_idx
 
@@ -106,42 +108,78 @@ class RandomProportional(Sampler):
         return len(self.indexes)
 
 
-class LimitedData(Sampler):
+class LimitedDataFromTrec(Sampler):
+    """Samples `limit_to` query - passages pairs from trec, then gets the same pairs from other tasks.
+    """
 
-    def __init__(self, limit_to: int, data_source: MTLDataset):
+    def __init__(self, data_source: MTLDataset,
+                 limit_to: int,
+                 non_trec_percentage: float = None):
+        """
+
+        :param limit_to: only use this many samples from the trec train dataset.
+        :param non_trec_percentage: how many samples to get from the other tasks in percent of limit_to.
+        :param data_source: the mtl dataset to sample from.
+        :param additional_tasks: the names of tasks to be included for sampling.
+        """
         super().__init__(data_source)
 
         self.LOGGER = getLogger(__name__ + '.' + self.__class__.__name__)
 
+        # we cache the valid trec qid-pid pairs since it takes a while to get them from the dataset
         self.cache_file = to_absolute_path('.cache/pair_cache.pkl')
         makedirs(to_absolute_path('.cache'), exist_ok=True)
 
         self.limit_to = limit_to
-
         self.name_pair_idx = self._get_name_pair_idx(data_source)
 
         # we want to use the same samples regardless of the global random seed,
         # so we can still change it without affecting the samples we're operating on
         sampled_pairs = Random(52317565).sample(set(self.name_pair_idx['trec2019'].keys()), limit_to)
+        self.name_to_samples = self._get_name_to_samples(data_source.name_to_idx, sampled_pairs)
 
+        # create pool of non trec indices to sample from
+        self.non_trec_samples = []
+        for name, samples in self.name_to_samples.items():
+            if name != 'trec2019':
+                self.non_trec_samples.extend(samples)
+
+        if non_trec_percentage is None:
+            self.num_non_trec = len(self.non_trec_samples)
+        else:
+            self.num_non_trec = min(len(self.non_trec_samples), int(limit_to * non_trec_percentage))
+
+        # log sample sizes
+        self.LOGGER.info('samples per task:')
+        for name, samples in self.name_to_samples.items():
+            self.LOGGER.info(f'{name}: {len(samples)}')
+        self.LOGGER.info(f'sampling {self.num_non_trec} / {len(self.non_trec_samples)} samples from additional tasks')
+
+    def __iter__(self):
+        final_samples = []
+        final_samples.extend(self.name_to_samples['trec2019'])
+        non_trec_samples = random.sample(self.non_trec_samples, self.num_non_trec)
+        final_samples.extend(non_trec_samples)
+
+        return iter(final_samples)
+
+    def __len__(self):
+        return len(self.name_to_samples['trec2019']) + self.num_non_trec
+
+    def _get_name_to_samples(self, name_to_idx, sampled_trec_pairs):
         ds_to_skipped = defaultdict(int)
-        self.final_indices = []
+        name_to_samples = defaultdict(list)
+
         for ds_name, pair_to_idx in self.name_pair_idx.items():
-            ds_idx = data_source.name_to_idx[ds_name]
-            for pair in sampled_pairs:
+            ds_idx = name_to_idx[ds_name]
+            for pair in sampled_trec_pairs:
                 try:
-                    self.final_indices.append((ds_idx, pair_to_idx[pair]))
+                    sample_idx = pair_to_idx[pair]
+                    name_to_samples[ds_name].append((ds_idx, sample_idx))
                 except KeyError:
                     ds_to_skipped[ds_name] += 1
 
-        self.LOGGER.info(f'total num samples: {len(self.final_indices)}')
-
-    def __iter__(self):
-        shuffle(self.final_indices)
-        return iter(self.final_indices)
-
-    def __len__(self):
-        return len(self.final_indices)
+        return name_to_samples
 
     def _get_name_pair_idx(self, datasource):
         datasets = datasource.datasets
@@ -156,7 +194,8 @@ class LimitedData(Sampler):
 
         return pairs_to_idx
 
-    def _build_trec_qid_pid_idx(self, trec_ds, sample_ids):
+    @staticmethod
+    def _build_trec_qid_pid_idx(trec_ds, sample_ids):
         with h5py.File(trec_ds.current_file, 'r') as fp:
             qid_pid_idx = {}
             for idx in tqdm(sample_ids, total=len(sample_ids)):
@@ -179,7 +218,8 @@ class LimitedData(Sampler):
 
         return trec_qid_pid_idx
 
-    def _get_json_qid_pid_idx(self, dataset: JSONDataset):
+    @staticmethod
+    def _get_json_qid_pid_idx(dataset: JSONDataset):
         qid_pid_to_idx = {(int(x['info']['qid']), int(x['info']['pid'])): i
                           for i, x in enumerate(dataset.data)}
         return qid_pid_to_idx

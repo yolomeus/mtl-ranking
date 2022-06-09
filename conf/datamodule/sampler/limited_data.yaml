@@ -1,2 +1,3 @@
-_target_: datamodule.sampler.LimitedData
+_target_: datamodule.sampler.LimitedDataFromTrec
 limit_to: 100
+non_trec_percentage: null
