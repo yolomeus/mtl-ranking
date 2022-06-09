@@ -112,7 +112,8 @@ class LimitedDataFromTrec(Sampler):
     """Samples `limit_to` query - passages pairs from trec, then gets the same pairs from other tasks.
     """
 
-    def __init__(self, data_source: MTLDataset,
+    def __init__(self,
+                 data_source: MTLDataset,
                  limit_to: int,
                  non_trec_percentage: float = None):
         """
@@ -120,7 +121,6 @@ class LimitedDataFromTrec(Sampler):
         :param limit_to: only use this many samples from the trec train dataset.
         :param non_trec_percentage: how many samples to get from the other tasks in percent of limit_to.
         :param data_source: the mtl dataset to sample from.
-        :param additional_tasks: the names of tasks to be included for sampling.
         """
         super().__init__(data_source)
 
