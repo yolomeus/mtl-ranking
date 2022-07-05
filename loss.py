@@ -9,8 +9,8 @@ from torchmetrics.functional import mean_squared_error
 
 
 class MultiTaskLoss(Module, ABC):
-    """A general base class for multitask losses. Takes a list of losses and corresponding keys
-
+    """A general base class for multitask losses. Takes a dict of name to dataset, where each dataset needs a loss
+    module as attribute.
     """
 
     def __init__(self, datasets: DictConfig):
