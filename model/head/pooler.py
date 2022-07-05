@@ -3,10 +3,10 @@ from typing import List
 
 import torch
 from torch import Tensor
-from torch.nn import Module
+from torch.nn import Module, Sequential, Linear, ReLU, Softmax
 
 
-class Pooler(Module):
+class Pooler(Module, ABC):
     """Base Class for Pooler Modules. A pooler takes in
     """
 
@@ -113,6 +113,32 @@ class SpanAverage(SpanPooler):
 
     def layer_aggregate(self, pooled_layers, meta):
         return torch.mean(torch.stack(pooled_layers), dim=0)
+
+
+class AttentionAverage(SpanAverage):
+    """Average along sequence dim, use attention weights across layers.
+    """
+
+    def __init__(self, att_h_dim: int, in_dim: int, out_dim: int, layers: List[int]):
+        super().__init__(in_dim, out_dim, layers)
+        assert len(layers) > 1
+        self.attention = Sequential(Linear(out_dim, att_h_dim),
+                                    ReLU(),
+                                    Linear(att_h_dim, 1),
+                                    Softmax(dim=1))
+
+    def sequence_aggregate(self, single_layer_out, meta=None):
+        if meta is not None and 'spans' in meta:
+            return super().sequence_aggregate(single_layer_out, meta)
+        return torch.mean(single_layer_out, dim=1)
+
+    def layer_aggregate(self, pooled_layers, meta):
+        # attention
+        pooled_layers = torch.stack(pooled_layers, dim=1)
+        att_scores = self.attention(pooled_layers)
+
+        x = (att_scores * pooled_layers).sum(1)
+        return x
 
 
 class Average(Pooler):
