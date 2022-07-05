@@ -1,8 +1,9 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from typing import List
 
 import torch
-from torch.nn import Module, MultiheadAttention, Linear, Sequential, Softmax, PReLU, ReLU
+from torch import Tensor
+from torch.nn import Module
 
 
 class Pooler(Module):
@@ -21,7 +22,6 @@ class Pooler(Module):
         self.out_dim = out_dim
         self.layers = layers
 
-    @abstractmethod
     def forward(self, inputs, meta=None):
         """
 
@@ -29,6 +29,58 @@ class Pooler(Module):
         :param meta:
         :return:
         """
+        pooled_layers = [self.sequence_aggregate(inputs[i], meta)
+                         for i in self.layers]
+
+        if len(pooled_layers) > 1:
+            return self.layer_aggregate(pooled_layers, meta)
+
+        return pooled_layers[0]
+
+    @abstractmethod
+    def sequence_aggregate(self, single_layer_out, meta):
+        """
+
+        :param single_layer_out: list of layers after performing pooling on each.
+        :param meta:
+        :return: aggregation of all layers
+        """
+
+    @abstractmethod
+    def layer_aggregate(self, pooled_layers, meta):
+        """
+
+        :param pooled_layers: list of layers after performing pooling on each.
+        :param meta:
+        :return: aggregation of all layers
+        """
+
+
+class SpanPooler(Pooler, ABC):
+    """Pooler that uses spans to pool along the sequence dimension.
+    """
+
+    def sequence_aggregate(self, single_layer_out, meta=None):
+        spans = meta['spans']
+
+        # pair of span batches stacked at dim=0
+        if len(spans.shape) == 3:
+            s1, s2 = self.collect_span_pairs(spans, single_layer_out)
+
+            s1 = torch.stack([self.span_aggregate(t) for t in s1])
+            s2 = torch.stack([self.span_aggregate(t) for t in s2])
+
+            pooled_layer = torch.cat([s1, s2], dim=-1)
+            return pooled_layer
+
+        # single batch of spans
+        elif len(spans.shape) == 2:
+            x = self.collect_spans(single_layer_out, meta['spans'])
+
+            pooled_layer = torch.stack([self.span_aggregate(t) for t in x])
+            return pooled_layer
+
+        raise NotImplementedError
 
     @staticmethod
     def collect_spans(x, spans):
@@ -45,77 +97,33 @@ class Pooler(Module):
         spans1, spans2 = spans[0], spans[1]
         x1 = self.collect_spans(x, spans1)
         x2 = self.collect_spans(x, spans2)
-
-        x1 = torch.stack([t.mean(0) for t in x1])
-        x2 = torch.stack([t.mean(0) for t in x2])
-
         return x1, x2
+
+    @abstractmethod
+    def span_aggregate(self, spans) -> Tensor:
+        """Aggregation function to be applied to each span.
+
+        :return:
+        """
+
+
+class SpanAverage(SpanPooler):
+    def span_aggregate(self, span) -> Tensor:
+        return torch.mean(span, dim=0)
+
+    def layer_aggregate(self, pooled_layers, meta):
+        return torch.mean(torch.stack(pooled_layers), dim=0)
 
 
 class Average(Pooler):
-    """Averages layer outputs over the sequence dimension. If multiple layers are passed, they're averaged over the
-    layer dimension first.
+    """Averages layer outputs over the sequence dimension and layer dimension.
     """
 
-    def __init__(self, in_dim: int, out_dim: int, layers: List[int]):
-        super().__init__(in_dim, out_dim, layers)
-        self._pool_layers = False
-        if len(self.layers) > 1:
-            self._pool_layers = True
+    def sequence_aggregate(self, single_layer_out, meta):
+        return torch.mean(single_layer_out, dim=1)
 
-    def forward(self, inputs, meta=None):
-        """
-        :param inputs: a list containing for each layer: a batch of sequences of vectors with size in_dim
-        :param meta:
-        """
-        layer_outputs = [inputs[i] for i in self.layers]
-
-        if self._pool_layers:
-            x = torch.stack(layer_outputs, dim=-1).mean(-1)
-        else:
-            x = layer_outputs[0]
-
-        if meta and 'spans' in meta:
-            spans = meta['spans']
-            if len(spans.shape) == 3:
-                spans1, spans2 = self.collect_span_pairs(spans, x)
-                x = torch.cat([spans1, spans2], dim=-1)
-                return x
-
-            x = self.collect_spans(x, meta['spans'])
-
-        x = torch.stack([t.mean(0) for t in x])
-        return x
-
-
-class AttentionAverage(Pooler):
-    """Average along sequence dim, use attention weights across layers.
-    """
-
-    def __init__(self, in_dim: int, out_dim: int, layers: List[int]):
-        super().__init__(in_dim, out_dim, layers)
-        assert len(layers) > 1
-        self.attention = Sequential(Linear(in_dim, in_dim),
-                                    ReLU(),
-                                    Linear(in_dim, 1))
-
-    def forward(self, inputs, meta=None):
-        layer_outputs = [inputs[i] for i in self.layers]
-
-        if meta and 'spans' in meta:
-            layer_spans = [self.collect_spans(layer_out, meta['spans'])
-                           for layer_out in layer_outputs]
-            layer_embeds = [[x.mean(0) for x in layer] for layer in layer_spans]
-            # stack along batch dim
-            layer_embeds = [torch.stack(layer) for layer in layer_embeds]
-        else:
-            layer_embeds = [x.mean(1) for x in layer_outputs]
-
-        att_scores = torch.stack([self.attention(x) for x in layer_embeds]).softmax(0)
-        layer_embeds = torch.stack(layer_embeds)
-        x = (att_scores * layer_embeds).sum(0)
-
-        return x
+    def layer_aggregate(self, pooled_layers, meta):
+        return torch.mean(torch.stack(pooled_layers), dim=0)
 
 
 class CLSToken(Pooler):
@@ -127,56 +135,8 @@ class CLSToken(Pooler):
         super().__init__(in_dim, out_dim, layers)
         assert in_dim == out_dim or out_dim is None
 
-    def forward(self, inputs, meta=None):
-        # select CLS token for each layer
-        layer_outputs = [inputs[i][:, 0] for i in self.layers]
+    def sequence_aggregate(self, single_layer_out, meta):
+        return single_layer_out[:, 0]
 
-        # only average if there are multiple cls tokens
-        if len(self.layers) > 1:
-            x = torch.stack(layer_outputs, -1).mean(-1)
-        else:
-            x = layer_outputs[0]
-
-        return x
-
-
-class SimpleAttention(Pooler):
-    def __init__(self, in_dim: int, out_dim: int, layers: List[int]):
-        super().__init__(in_dim, out_dim, layers)
-        assert len(layers) == 1
-        self.in_transform = Sequential(Linear(in_dim, out_dim),
-                                       ReLU())
-        self.attention_score = Linear(out_dim, 1)
-
-    def forward(self, inputs, meta=None):
-        x = [inputs[i] for i in self.layers][0]
-
-        x = self.in_transform(x)
-        a = self.attention_score(x).softmax(1)
-        x = x * a
-
-        if meta and 'spans' in meta:
-            x = self.collect_spans(x, meta['spans'])
-            return torch.stack([t.sum(0) for t in x])
-
-        return x.sum(1)
-
-
-class SelfAttention(Pooler):
-    """Applies a single layer of self attention, then computes weighted sum given point-wise mlp learned weights.
-    """
-
-    def __init__(self, in_dim: int, out_dim: int, layers: List[int]):
-        super().__init__(in_dim, out_dim, layers)
-        self.mha = MultiheadAttention(in_dim, 1, dropout=0.1, batch_first=True)
-        self.attention_scorer = Sequential(Linear(in_dim, in_dim),
-                                           PReLU(),
-                                           Linear(in_dim, 1),
-                                           Softmax(1))
-
-    def forward(self, inputs, meta=None):
-        x = inputs[self.layers]
-        out, _ = self.mha(x, x, x, need_weights=False)
-        a = self.attention_scorer(out)
-        out = (out * a).sum(1)
-        return out
+    def layer_aggregate(self, pooled_layers, meta):
+        return torch.mean(torch.stack(pooled_layers), dim=0)

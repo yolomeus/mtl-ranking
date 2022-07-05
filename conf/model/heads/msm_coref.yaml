@@ -1,5 +1,5 @@
 defaults:
-  - pooler: average
+  - pooler: span_average
 
 _target_: model.head.mlp.MLP
 h_dim: 128
@@ -9,4 +9,5 @@ sigmoid_out: false
 
 pooler:
   layers: [ 5 ]
+  # 2 * pooler.in_dim
   out_dim: 1536

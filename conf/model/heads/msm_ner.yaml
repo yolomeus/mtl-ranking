@@ -1,5 +1,5 @@
 defaults:
-  - pooler: average
+  - pooler: span_average
 
 _target_: model.head.mlp.MLP
 h_dim: 128
