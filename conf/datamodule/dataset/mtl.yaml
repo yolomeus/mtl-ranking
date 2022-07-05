@@ -2,6 +2,7 @@ defaults:
   - ../dataset@datasets:
       - msm_sem_sim
       - msm_ner
+      - msm_coref
       - msm_bm25
       - trec2019
 
