@@ -1,0 +1,6 @@
+_target_: model.head.pooler.SelfAttentionAverage
+in_dim: ${model.body.out_dim}
+out_dim: ${model.body.out_dim}
+num_heads: 8
+att_dp: 0.1
+layers: ???

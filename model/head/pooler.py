@@ -3,7 +3,7 @@ from typing import List
 
 import torch
 from torch import Tensor
-from torch.nn import Module, Sequential, Linear, ReLU, Softmax
+from torch.nn import Module, Sequential, Linear, ReLU, Softmax, MultiheadAttention
 
 
 class Pooler(Module, ABC):
@@ -139,6 +139,25 @@ class AttentionAverage(SpanAverage):
 
         x = (att_scores * pooled_layers).sum(1)
         return x
+
+
+class SelfAttentionAverage(SpanAverage):
+    """Average over sequence dimension, apply multi-head attention along layers, then average.
+    """
+
+    def __init__(self, in_dim: int, out_dim: int, layers: List[int], num_heads: int, att_dp: float):
+        super().__init__(in_dim, out_dim, layers)
+        self.mha = MultiheadAttention(out_dim, num_heads, dropout=att_dp, batch_first=True)
+
+    def sequence_aggregate(self, single_layer_out, meta=None):
+        if meta is not None and 'spans' in meta:
+            return super().sequence_aggregate(single_layer_out, meta)
+        return torch.mean(single_layer_out, dim=1)
+
+    def layer_aggregate(self, pooled_layers, meta):
+        pooled_layers = torch.stack(pooled_layers, dim=1)
+        x, _ = self.mha(pooled_layers, pooled_layers, pooled_layers, need_weights=False)
+        return torch.mean(x, dim=1)
 
 
 class Average(Pooler):
