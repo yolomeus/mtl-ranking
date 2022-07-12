@@ -67,6 +67,11 @@ class PreparedDataset(Dataset, ABC):
         :return: a pytorch dataset representing the selected split.
         """
 
+    @abstractmethod
+    def collate(self, *args, **kwargs):
+        """Defines how to collate multiple samples into a batch
+        """
+
     def get_split(self, split: DatasetSplit):
         return deepcopy(self._get_split(split))
 
@@ -136,8 +141,7 @@ class TREC2019(PreparedDataset):
                  metrics: Dict[str, ModuleDict],
                  to_probabilities: Module,
                  loss: Module,
-                 preprocessor: Preprocessor,
-                 num_train_samples):
+                 preprocessor: Preprocessor):
 
         super().__init__(name, metrics, to_probabilities, loss, preprocessor)
         self.name = name
@@ -157,16 +161,7 @@ class TREC2019(PreparedDataset):
         self.current_file = None
         self.split = None
 
-        # instead of just limiting to the first k samples of the ds, we sample indices uniformly
-        # this prevents sampling bias, as the full ds is not shuffled beforehand
-        self.num_train_samples = num_train_samples
-        if num_train_samples is not None:
-            self.idx_map = self._get_index_map()
-
     def __getitem__(self, index):
-        if self.use_index_map():
-            index = self.idx_map[index]
-
         with h5py.File(self.current_file, 'r') as fp:
             q_id, doc_id, og_q_id, og_doc_id = self.get_ids(fp, index)
             label, label_rank = self.get_label(fp, index, og_q_id, og_doc_id)
@@ -180,9 +175,6 @@ class TREC2019(PreparedDataset):
         return x
 
     def __len__(self):
-        if self.split == DatasetSplit.TRAIN and self.num_train_samples is not None:
-            return self.num_train_samples
-
         with h5py.File(self.current_file, "r") as fp:
             return len(fp['q_ids'])
 
@@ -242,7 +234,8 @@ class TREC2019(PreparedDataset):
         with h5py.File(self._data_file, 'r') as fp:
             return int(fp['orig_doc_ids'].asstr()[doc_id])
 
-    def get_qrel(self, og_q_id, og_doc_id, qrels):
+    @staticmethod
+    def get_qrel(og_q_id, og_doc_id, qrels):
         label = qrels[int(og_q_id)].get(int(og_doc_id), 0)
         return torch.tensor(label)
 
@@ -278,23 +271,6 @@ class TREC2019(PreparedDataset):
             x['meta']['y_rank'] = y_rank
 
         return x
-
-    def _get_index_map(self):
-        """returns a dict that randomly maps each index in [0, self.num_train_samples] to an index in
-        [0, num_all_train_samples].
-        """
-
-        with h5py.File(self._train_file, "r") as fp:
-            num_all_train_samples = len(fp['q_ids'])
-
-        assert self.num_train_samples <= num_all_train_samples
-
-        all_train_idxs = range(num_all_train_samples)
-        return dict(zip(range(self.num_train_samples),
-                        Random(5823905).sample(all_train_idxs, self.num_train_samples)))
-
-    def use_index_map(self):
-        return self.num_train_samples is not None and self.split == DatasetSplit.TRAIN
 
 
 class TREC2019Pairwise(TREC2019):
