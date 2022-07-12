@@ -1,1 +1,6 @@
 _target_: datamodule.sampler.RandomProportional
+ds_to_limit:
+  msm_bm25: null
+  msm_sem_sim: null
+  msm_ner: null
+  msm_coref: null

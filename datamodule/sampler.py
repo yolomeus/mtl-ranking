@@ -5,7 +5,7 @@ from logging import getLogger
 from os import makedirs
 from os.path import exists
 from random import shuffle, Random
-from typing import Iterator
+from typing import Iterator, Dict
 
 import h5py
 import torch
@@ -88,13 +88,18 @@ class SequentialMultiTask(Sampler):
 
 
 class RandomProportional(Sampler):
-    def __init__(self, data_source: MTLDataset):
+    def __init__(self, data_source: MTLDataset, ds_to_limit: Dict[str, int] = None):
         super().__init__(data_source)
         self.data_source = data_source
         self.indexes = []
 
-        for ds_idx in range(self.data_source.num_datasets):
-            for sample_idx in range(self.data_source.dataset_sizes[ds_idx]):
+        for ds_name, ds_idx in self.data_source.name_to_idx.items():
+            num_samples = self.data_source.dataset_sizes[ds_idx]
+            if ds_name in ds_to_limit and ds_to_limit[ds_name] is not None:
+                assert num_samples >= ds_to_limit[ds_name]
+                num_samples = ds_to_limit[ds_name]
+
+            for sample_idx in range(num_samples):
                 self.indexes.append((ds_idx, sample_idx))
 
         shuffle(self.indexes)
