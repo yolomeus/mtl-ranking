@@ -144,7 +144,7 @@ def tost_2_percent(a, b):
 def main():
     ap = ArgumentParser()
     ap.add_argument('base_dir', type=str,
-                    help='base directory to prediction folders, i.e. "./<task>/<layer>/predictions"')
+                    help='base directory to prediction folders, i.e. "./" for "./<task>/<layer>/predictions"')
     ap.add_argument('out_dir', type=str, help='output directory for test results')
     ap.add_argument('qrels_file', type=str, help='qrels.txt following the trec format, e.g. "2019qrels-pass.txt"')
     ap.add_argument('--pred_files', type=str, default='trec2019.csv',
