@@ -124,12 +124,12 @@ def ttest_one_sided(a, b):
 
 
 def tost_5_percent(a, b):
-    bound = np.mean([a, b]) * 0.05
+    bound = np.mean(a) * 0.05
     return tost(a, b, bound=bound, paired=True).loc['TOST', 'pval']
 
 
 def tost_2_percent(a, b):
-    bound = np.mean([a, b]) * 0.02
+    bound = np.mean(a) * 0.02
     return tost(a, b, bound=bound, paired=True).loc['TOST', 'pval']
 
 
