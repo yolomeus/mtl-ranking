@@ -1,14 +1,19 @@
+import glob
+import json
 import pickle
+import re
 from argparse import ArgumentParser
 from collections import defaultdict
-from os.path import split, join
+from os.path import join
 from pathlib import Path
+from typing import Callable, List
 
 import numpy as np
 import pandas as pd
 import pytrec_eval
+from pingouin import tost
 from scipy.stats import ttest_rel
-from scipy.stats.stats import Ttest_relResult
+from tqdm import tqdm
 
 
 def load_pickle(file: str):
@@ -62,7 +67,8 @@ def export_results(results, file_names, export_dir):
         fp.writelines(results)
 
 
-def test_predictions(file1, file2, qrels, metric_names):
+def test_predictions(file1: str, file2: str, qrels: str, metric_names: List[str],
+                     test_fn: Callable):
     load1 = get_load_fn(file1)
     load2 = get_load_fn(file2)
     load_qr = get_load_fn(qrels)
@@ -70,12 +76,7 @@ def test_predictions(file1, file2, qrels, metric_names):
     x1 = load1(file1)
     x2 = load2(file2)
     qrels = load_qr(qrels)
-
-    file1_name = split(file1)[-1]
-    file2_name = split(file2)[-1]
-
-    results = [('metric', file1_name, file2_name, 'statistic', 'pvalue')]
-
+    row = []
     for metric_name in metric_names:
         evaluator = pytrec_eval.RelevanceEvaluator(qrels, {metric_name})
         result1 = evaluator.evaluate(x1)
@@ -86,32 +87,85 @@ def test_predictions(file1, file2, qrels, metric_names):
         scores_1 = [result1[i][metric_name] for i in q_ids]
         scores_2 = [result2[i][metric_name] for i in q_ids]
 
-        avg_score1 = np.mean(scores_1)
-        avg_score2 = np.mean(scores_2)
+        pval = test_fn(scores_1, scores_2)
+        row.append({'metric': metric_name, 'pval': pval})
 
-        ttest_result: Ttest_relResult = ttest_rel(scores_2, scores_1)
+    return row
 
-        results.append((metric_name, avg_score1, avg_score2, ttest_result.statistic, ttest_result.pvalue))
 
-        print(f'{metric_name}:',
-              '\nfile1:', avg_score1, '\nfile2', avg_score2,
-              '\n')
-        print(ttest_result, '\n')
-        print('-' * 100)
+def get_prediction_paths(base_path, filename):
+    """
+    :param base_path: directory to search in
+    :param filename: name of each prediction file
+    :return: list of paths to prediction files matching `filename`
+    """
+    path_pattern = Path(base_path) / "*/*/predictions/" / filename
+    x = glob.glob(str(path_pattern))
+    return x
 
-    export_results(results, [file1_name, file2_name], Path(file1).parent)
+
+def get_other_name(other_file):
+    x = str(Path(other_file).as_uri())
+    name = re.search(r'.*/(.*/.*)/predictions', x).group(1)
+    name = name.replace('/', '_')
+    return name
+
+
+def test_baseline_against_all(baseline_file, others_files, qrels_file, metric_names, test_fn):
+    results = {}
+    for other_file in tqdm(others_files, total=len(others_files)):
+        other_name = get_other_name(other_file)
+        result = test_predictions(baseline_file, other_file, qrels_file, metric_names, test_fn)
+        results[other_name] = result
+
+    return results
+
+
+def dump_json(file, x):
+    with open(file, 'w') as fp:
+        json.dump(x, fp)
+
+
+# significance test functions
+def ttest_one_sided(a, b):
+    return ttest_rel(a, b, alternative='less').pvalue
+
+
+def tost_5_percent(a, b):
+    bound = np.mean([a, b]) * 0.05
+    return tost(a, b, bound=bound, paired=True).loc['TOST', 'pval']
+
+
+def tost_2_percent(a, b):
+    bound = np.mean([a, b]) * 0.02
+    return tost(a, b, bound=bound, paired=True).loc['TOST', 'pval']
 
 
 def main():
     ap = ArgumentParser()
-    ap.add_argument('pred_file1', type=str, help='file containing predictions, either as pkl or csv.')
-    ap.add_argument('pred_file2', type=str, help='file containing predictions, either as pkl or csv.')
-    ap.add_argument('qrels_file', type=str, help='qrels.txt following the trec format.')
-    ap.add_argument('--metrics', nargs='+', default=['recip_rank', 'map'])
+    ap.add_argument('base_dir', type=str,
+                    help='base directory to prediction folders, i.e. "./<task>/<layer>/predictions"')
+    ap.add_argument('out_dir', type=str, help='output directory for test results')
+    ap.add_argument('qrels_file', type=str, help='qrels.txt following the trec format, e.g. "2019qrels-pass.txt"')
+    ap.add_argument('--pred_files', type=str, default='trec2019.csv',
+                    help='Shared name for prediction files for a given dataset. All prediction files are expected to '
+                         'be named like this.')
+    ap.add_argument('--metrics', nargs='+', default=['map', 'recip_rank', 'ndcg_cut_10', 'ndcg_cut_20', 'P_10', 'P_20'])
 
     args = ap.parse_args()
 
-    test_predictions(args.pred_file1, args.pred_file2, args.qrels_file, args.metrics)
+    file_name = args.pred_files
+    baseline_file = f'{args.base_dir}/baseline/predictions/' + file_name
+    others_files = get_prediction_paths(args.base_dir, file_name)
+
+    ttest_res = test_baseline_against_all(baseline_file, others_files, args.qrels_file, args.metrics, ttest_one_sided)
+    tost_5_res = test_baseline_against_all(baseline_file, others_files, args.qrels_file, args.metrics, tost_5_percent)
+    tost_2_res = test_baseline_against_all(baseline_file, others_files, args.qrels_file, args.metrics, tost_5_percent)
+
+    name = file_name.split('.')[0]
+    dump_json(f'./significance/ttest_{name}.json', ttest_res)
+    dump_json(f'./significance/tost_5_percent_{name}.json', tost_5_res)
+    dump_json(f'./significance/tost_2_percent_{name}.json', tost_2_res)
 
 
 if __name__ == '__main__':
