@@ -4,7 +4,6 @@ import pickle
 import re
 from argparse import ArgumentParser
 from collections import defaultdict
-from os.path import join
 from pathlib import Path
 from typing import Callable, List
 
@@ -58,13 +57,6 @@ def get_load_fn(file):
     elif 'qrels' in file and file.endswith('.txt'):
         return load_qrels
     raise NotImplementedError
-
-
-def export_results(results, file_names, export_dir):
-    file_names = map(lambda x: x.split('.')[0], file_names)
-    with open(join(export_dir, '-'.join(['ttest', *file_names]) + '.csv'), 'w') as fp:
-        results = map(lambda x: ','.join(map(str, x)) + '\n', results)
-        fp.writelines(results)
 
 
 def test_predictions(file1: str, file2: str, qrels: str, metric_names: List[str],
